@@ -145,6 +145,9 @@ class PolicyUpdateRequest(BaseModel):
     route_fallback_confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     route_handoff_confidence_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     intent_stack_max_depth: int | None = Field(default=None, ge=1, le=20)
+    response_cache_enabled: bool | None = None
+    response_cache_ttl_seconds: int | None = Field(default=None, ge=0, le=86400)
+    cost_alert_estimated_cents: float | None = Field(default=None, ge=0.0, le=1_000_000.0)
     risk_keywords: list[str] | None = None
     human_request_keywords: list[str] | None = None
     intent_return_keywords: list[str] | None = None

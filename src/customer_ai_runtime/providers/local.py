@@ -17,6 +17,7 @@ from customer_ai_runtime.domain.models import (
     KnowledgeChunk,
     LLMRequest,
     LLMResponse,
+    LLMUsage,
     RetrievalHit,
     TTSRequest,
     TTSResult,
@@ -32,6 +33,11 @@ from customer_ai_runtime.providers.base import (
 
 class LocalLLMProvider(LLMProvider):
     async def generate(self, request: LLMRequest) -> LLMResponse:
+        usage = _estimate_usage(
+            request.prompt_template,
+            request.user_message,
+            " ".join(message.content for message in request.history[-6:]),
+        )
         industry = request.business_context.get("industry")
         context_hint = ""
         if industry:
@@ -42,6 +48,7 @@ class LocalLLMProvider(LLMProvider):
                 confidence=0.98,
                 suggested_actions=["wait_for_human"],
                 citations=request.citations,
+                usage=usage,
             )
         if request.tool_result:
             return LLMResponse(
@@ -52,6 +59,7 @@ class LocalLLMProvider(LLMProvider):
                 confidence=0.88 if request.tool_result.status == "success" else 0.52,
                 citations=request.citations,
                 suggested_actions=["continue_query", "handoff"],
+                usage=usage,
             )
         if request.citations:
             citation_titles = "、".join(citation.title for citation in request.citations[:2])
@@ -64,11 +72,13 @@ class LocalLLMProvider(LLMProvider):
                 confidence=0.79,
                 citations=request.citations,
                 suggested_actions=["business_query", "handoff"],
+                usage=usage,
             )
         return LLMResponse(
             answer=f"我暂时没有足够信息给出确定答复，建议补充订单号、售后单号或转人工处理。{context_hint}",
             confidence=0.32,
             suggested_actions=["provide_identifier", "handoff"],
+            usage=usage,
         )
 
 
@@ -127,6 +137,17 @@ def _tone_frames(frequency: int, seconds: float, sample_rate: int = 16000) -> by
 def _silence_frames(seconds: float, sample_rate: int = 16000) -> bytes:
     frame_count = int(sample_rate * seconds)
     return b"".join(struct.pack("<h", 0) for _ in range(frame_count))
+
+
+def _estimate_usage(*texts: str) -> LLMUsage:
+    input_tokens = max(1, sum(max(1, len(text or "") // 2) for text in texts if text))
+    output_tokens = max(16, min(256, input_tokens // 3))
+    return LLMUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+        estimated=True,
+    )
 
 
 class LocalVectorStoreProvider(VectorStoreProvider):

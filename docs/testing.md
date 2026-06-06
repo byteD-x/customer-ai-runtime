@@ -59,6 +59,9 @@
 
 ```powershell
 .venv\Scripts\python.exe -m pytest
+powershell -ExecutionPolicy Bypass -File scripts\test.ps1
+.venv\Scripts\python.exe scripts\eval_rag.py
+.venv\Scripts\python.exe examples\interview_demo.py
 ```
 
 Linux/macOS 示例：
@@ -83,6 +86,12 @@ python -m compileall -q src tests
 - 知识版本切换后，新增文档与检索命中应落在新的激活版本
 - 切片优化应用后，应生成新版本并保留优化报告
 - 知识库效果分析应能输出命中率、满意度与负反馈率
+- 知识问答首次请求应 `cache_hit=false`，重复同一安全知识问答应 `cache_hit=true`
+- 业务工具查询必须保持 `cache_hit=false`，避免缓存实时订单/售后状态
+- 成本摘要应按 provider、route 聚合 token、估算成本和缓存命中
+- 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领
+- RAG eval 应覆盖命中、低分未命中、引用关键词失败明细
+- 面试演示脚本应输出 `route`、`citations`、`tool_result`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`
 - 缺失 API Key 时可由宿主桥接完成认证
 - 不同行业上下文能影响路由与工具选择
 - 插件禁用后有默认兜底
@@ -90,3 +99,5 @@ python -m compileall -q src tests
 ## 6. 当前不可验证项
 
 - 若未配置真实 OpenAI / Qdrant / 外部业务系统，只能验证本地默认提供商链路，不能宣称外部联调已通过。
+- `scripts/eval_rag.py` 使用本地 provider 与临时存储，验证的是可重复的离线评测闭环，不代表线上准确率。
+- `examples/interview_demo.py` 是面试演示脚本，用于串起本地闭环，不代表生产压测结果。

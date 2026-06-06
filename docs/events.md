@@ -31,6 +31,7 @@
 - `chat.tool_executed`：业务工具已执行
 - `chat.knowledge_retrieved`：知识检索完成（包含 `effective_hit`）
 - `knowledge.retrieve_miss`：知识检索未命中有效引用（warning）
+- `chat.cost_recorded`：LLM usage、缓存命中、估算成本与预算状态已记录
 - `chat.handoff_required`：需要转人工（warning）
 - `chat.completed`：一次聊天请求完成（包含 `duration_ms`）
 - `voice.turn_completed`：一次语音轮次完成（包含 `duration_ms`）
@@ -38,11 +39,31 @@
 - `session.satisfaction_recorded` / `session.resolution_recorded`
 - `message.feedback_recorded` / `message.feedback_request_human`
 
-## 3. 注意事项
+## 3. 成本治理事件字段
+
+`chat.cost_recorded` 的 `context` 当前包含：
+
+- `tenant_id`
+- `session_id`
+- `provider`
+- `route`
+- `channel`
+- `cache_hit`
+- `input_tokens`
+- `output_tokens`
+- `total_tokens`
+- `usage_estimated`
+- `estimated_cost_cents`
+- `budget_status`
+
+这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
+
+## 4. 注意事项
 
 - 诊断事件默认会对自由文本做截断/脱敏，不保证保留原文。
 - 事件属于“诊断面”而非实时音频热路径；RTC 热路径中的事件以 WebSocket 消息为主。
+- RAG eval 脚本主要消费 Chat API 返回值，不依赖诊断事件作为唯一依据。
 
-## 4. 导出（当前实现）
+## 5. 导出（当前实现）
 
 可选配置 `CUSTOMER_AI_DIAGNOSTICS_EXPORT_PATH`（相对路径会落在 `storage_root` 下），启用后会把每条诊断事件以 JSON Lines 方式追加写入该文件，便于外部采集器摄取。

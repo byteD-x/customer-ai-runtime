@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from time import perf_counter
 from typing import Any
 
@@ -23,6 +25,7 @@ from customer_ai_runtime.domain.models import (
     BusinessResult,
     DiagnosticLevel,
     LLMRequest,
+    LLMUsage,
     MessageRole,
     RouteType,
 )
@@ -194,84 +197,148 @@ class ChatService:
         elif route_decision.route == RouteType.BUSINESS:
             prompt_template = prompts.business_answer
 
-        llm_response = await self.llm_provider.generate(
-            LLMRequest(
-                tenant_id=tenant_id,
-                session_id=session.session_id,
-                route=route_decision.route,
-                user_message=message,
-                history=session.messages,
-                citations=citations,
-                tool_result=tool_result,
-                prompt_template=prompt_template,
-                business_context=business_context.model_dump(mode="json"),
-            )
+        cache_key = self._build_response_cache_key(
+            tenant_id=tenant_id,
+            message=message,
+            route=route_decision.route,
+            knowledge_base_id=knowledge_base_id,
+            knowledge_version_id=knowledge_version_id,
+            prompt_template=prompt_template,
+            citations=[citation.model_dump(mode="json") for citation in citations],
+            host_auth_context=host_auth_context,
         )
-
-        response_payload: dict[str, Any] = {
-            "session_id": session.session_id,
-            "state": session.state.value,
-            "route": route_decision.route.value,
-            "confidence": round(llm_response.confidence, 4),
-            "route_confidence": round(route_decision.confidence, 4),
-            "route_confidence_band": route_decision.confidence_band,
-            "intent": route_decision.intent,
-            "answer": llm_response.answer,
-            "citations": [citation.model_dump(mode="json") for citation in llm_response.citations],
-            "tool_result": None if tool_result is None else tool_result.model_dump(mode="json"),
-            "handoff": None,
-            "industry": business_context.industry,
-            "host_auth_context": None
-            if host_auth_context is None
-            else host_auth_context.model_dump(mode="json"),
-            "requires_handoff": route_decision.requires_handoff,
-            "reason": route_decision.reason,
-            "route_decision": {
-                "route": route_decision.route.value,
-                "confidence": round(route_decision.confidence, 4),
-                "confidence_band": route_decision.confidence_band,
-                "intent": route_decision.intent,
-                "tool_name": route_decision.tool_name,
-                "reason": route_decision.reason,
-                "matched_signals": list(route_decision.matched_signals),
-            },
-        }
-
-        should_handoff, handoff_reason = await self.handoff_service.should_handoff(
-            business_context=business_context,
-            route=route_decision.route.value,
-            response=response_payload,
+        cached_response = (
+            None if cache_key is None else self.runtime_config.get_cached_response(cache_key)
         )
-        if should_handoff:
-            handoff_package = await self.handoff_service.create_package(
-                session,
-                handoff_reason or route_decision.reason,
-                business_context,
-            )
-            response_payload["handoff"] = (
-                None if handoff_package is None else handoff_package.model_dump(mode="json")
-            )
-            response_payload["answer"] = zh(
-                "\\u5f53\\u524d\\u95ee\\u9898\\u5efa\\u8bae\\u7531\\u4eba\\u5de5\\u5ba2\\u670d"
-                "\\u7ee7\\u7eed\\u5904\\u7406\\uff0c\\u6211\\u5df2\\u6574\\u7406\\u4e0a\\u4e0b"
-                "\\u6587\\u5e76\\u53d1\\u8d77\\u8f6c\\u63a5\\u3002"
-            )
-            response_payload["confidence"] = max(response_payload["confidence"], 0.92)
+        cache_hit = cached_response is not None
+        if cache_hit:
+            response_payload = dict(cached_response or {})
+            response_payload["session_id"] = session.session_id
             response_payload["state"] = session.state.value
-            self.metrics.increment("handoff_count")
-            self.diagnostics.record(
-                DiagnosticLevel.WARNING,
-                "chat.handoff_required",
-                "session routed to human handoff",
-                {
-                    "tenant_id": tenant_id,
-                    "session_id": session.session_id,
-                    "route": route_decision.route.value,
-                    "reason": handoff_reason,
-                },
+            response_payload["host_auth_context"] = (
+                None if host_auth_context is None else host_auth_context.model_dump(mode="json")
+            )
+            response_payload["cache_hit"] = True
+            response_payload["usage"] = LLMUsage().model_dump(mode="json")
+            self.metrics.increment("llm_cache_hits")
+        else:
+            llm_response = await self.llm_provider.generate(
+                LLMRequest(
+                    tenant_id=tenant_id,
+                    session_id=session.session_id,
+                    route=route_decision.route,
+                    user_message=message,
+                    history=session.messages,
+                    citations=citations,
+                    tool_result=tool_result,
+                    prompt_template=prompt_template,
+                    business_context=business_context.model_dump(mode="json"),
+                )
+            )
+            usage = llm_response.usage or self._estimate_usage(
+                prompt_template,
+                message,
+                llm_response.answer,
+                " ".join(item.content for item in session.messages[-6:]),
             )
 
-        response_payload = await self.response_enhancer.enhance(response_payload, business_context)
+            response_payload = {
+                "session_id": session.session_id,
+                "state": session.state.value,
+                "route": route_decision.route.value,
+                "confidence": round(llm_response.confidence, 4),
+                "route_confidence": round(route_decision.confidence, 4),
+                "route_confidence_band": route_decision.confidence_band,
+                "intent": route_decision.intent,
+                "answer": llm_response.answer,
+                "citations": [
+                    citation.model_dump(mode="json") for citation in llm_response.citations
+                ],
+                "tool_result": None if tool_result is None else tool_result.model_dump(mode="json"),
+                "handoff": None,
+                "industry": business_context.industry,
+                "host_auth_context": None
+                if host_auth_context is None
+                else host_auth_context.model_dump(mode="json"),
+                "requires_handoff": route_decision.requires_handoff,
+                "reason": route_decision.reason,
+                "route_decision": {
+                    "route": route_decision.route.value,
+                    "confidence": round(route_decision.confidence, 4),
+                    "confidence_band": route_decision.confidence_band,
+                    "intent": route_decision.intent,
+                    "tool_name": route_decision.tool_name,
+                    "reason": route_decision.reason,
+                    "matched_signals": list(route_decision.matched_signals),
+                },
+                "cache_hit": False,
+                "usage": usage.model_dump(mode="json"),
+            }
+
+            should_handoff, handoff_reason = await self.handoff_service.should_handoff(
+                business_context=business_context,
+                route=route_decision.route.value,
+                response=response_payload,
+            )
+            if should_handoff:
+                handoff_package = await self.handoff_service.create_package(
+                    session,
+                    handoff_reason or route_decision.reason,
+                    business_context,
+                )
+                response_payload["handoff"] = (
+                    None if handoff_package is None else handoff_package.model_dump(mode="json")
+                )
+                response_payload["answer"] = zh(
+                    "\\u5f53\\u524d\\u95ee\\u9898\\u5efa\\u8bae\\u7531\\u4eba\\u5de5\\u5ba2\\u670d"
+                    "\\u7ee7\\u7eed\\u5904\\u7406\\uff0c\\u6211\\u5df2\\u6574\\u7406\\u4e0a\\u4e0b"
+                    "\\u6587\\u5e76\\u53d1\\u8d77\\u8f6c\\u63a5\\u3002"
+                )
+                response_payload["confidence"] = max(response_payload["confidence"], 0.92)
+                response_payload["state"] = session.state.value
+                self.metrics.increment("handoff_count")
+                self.diagnostics.record(
+                    DiagnosticLevel.WARNING,
+                    "chat.handoff_required",
+                    "session routed to human handoff",
+                    {
+                        "tenant_id": tenant_id,
+                        "session_id": session.session_id,
+                        "route": route_decision.route.value,
+                        "reason": handoff_reason,
+                    },
+                )
+
+            response_payload = await self.response_enhancer.enhance(
+                response_payload, business_context
+            )
+            response_payload["cache_hit"] = False
+            response_payload["usage"] = usage.model_dump(mode="json")
+            if (
+                cache_key is not None
+                and route_decision.route == RouteType.KNOWLEDGE
+                and response_payload.get("handoff") is None
+            ):
+                self.runtime_config.set_cached_response(cache_key, response_payload)
+
+        usage_payload = response_payload.get("usage")
+        usage = LLMUsage.model_validate(usage_payload or {})
+        estimated_cost_cents = self._estimated_cost_cents(usage)
+        budget_status = (
+            "alert" if estimated_cost_cents >= policies.cost_alert_estimated_cents else "ok"
+        )
+        response_payload["estimated_cost_cents"] = estimated_cost_cents
+        response_payload["budget_status"] = budget_status
+        self._record_cost(
+            tenant_id=tenant_id,
+            session_id=session.session_id,
+            route=route_decision.route,
+            channel=channel,
+            usage=usage,
+            cache_hit=cache_hit,
+            estimated_cost_cents=estimated_cost_cents,
+            budget_status=budget_status,
+        )
         self.session_service.add_message(
             session,
             MessageRole.ASSISTANT,
@@ -288,6 +355,8 @@ class ChatService:
                 "knowledge_effective_hit": effective_hit_count > 0
                 if route_decision.route == RouteType.KNOWLEDGE
                 else None,
+                "cache_hit": cache_hit,
+                "estimated_cost_cents": estimated_cost_cents,
             },
         )
         duration_ms: int | None = None
@@ -314,3 +383,92 @@ class ChatService:
         response_payload.pop("requires_handoff", None)
         response_payload.pop("reason", None)
         return response_payload
+
+    def _build_response_cache_key(
+        self,
+        *,
+        tenant_id: str,
+        message: str,
+        route: RouteType,
+        knowledge_base_id: str | None,
+        knowledge_version_id: str | None,
+        prompt_template: str,
+        citations: list[dict[str, Any]],
+        host_auth_context: HostAuthContext | None,
+    ) -> str | None:
+        if route != RouteType.KNOWLEDGE or host_auth_context is not None or not citations:
+            return None
+        citation_keys = [
+            {
+                "knowledge_base_id": citation.get("knowledge_base_id"),
+                "version_id": citation.get("version_id"),
+                "document_id": citation.get("document_id"),
+                "chunk_id": citation.get("chunk_id"),
+            }
+            for citation in citations
+        ]
+        payload = {
+            "tenant_id": tenant_id,
+            "query": " ".join(message.lower().split()),
+            "knowledge_base_id": knowledge_base_id,
+            "knowledge_version_id": knowledge_version_id,
+            "prompt_hash": hashlib.sha256(prompt_template.encode("utf-8")).hexdigest()[:12],
+            "citations": citation_keys,
+        }
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def _estimate_usage(self, *texts: str) -> LLMUsage:
+        input_tokens = max(1, sum(max(1, len(text or "") // 2) for text in texts if text))
+        output_tokens = max(16, min(256, input_tokens // 3))
+        return LLMUsage(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+            estimated=True,
+        )
+
+    def _estimated_cost_cents(self, usage: LLMUsage) -> float:
+        if usage.total_tokens <= 0:
+            return 0.0
+        return round(usage.total_tokens * 0.0001, 6)
+
+    def _record_cost(
+        self,
+        *,
+        tenant_id: str,
+        session_id: str,
+        route: RouteType,
+        channel: str,
+        usage: LLMUsage,
+        cache_hit: bool,
+        estimated_cost_cents: float,
+        budget_status: str,
+    ) -> None:
+        self.diagnostics.record(
+            DiagnosticLevel.INFO,
+            "chat.cost_recorded",
+            "chat cost and usage recorded",
+            {
+                "tenant_id": tenant_id,
+                "session_id": session_id,
+                "provider": self.runtime_config_provider_name(),
+                "route": route.value,
+                "channel": channel,
+                "cache_hit": cache_hit,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "total_tokens": usage.total_tokens,
+                "usage_estimated": usage.estimated,
+                "estimated_cost_cents": estimated_cost_cents,
+                "budget_status": budget_status,
+            },
+        )
+
+    def runtime_config_provider_name(self) -> str:
+        provider_class = self.llm_provider.__class__.__name__.lower()
+        if provider_class.startswith("local"):
+            return "local"
+        if provider_class.startswith("openai"):
+            return "openai"
+        return provider_class.removesuffix("provider")

@@ -16,7 +16,7 @@
 ![Industry](https://img.shields.io/badge/Industry-行业增强-purple)
 
 - **多模态客服** - 支持文本、语音轮次、RTC 实时通话三种接入模式
-- **宿主系统挂载** - 可作为 FastAPI 子应用挂载，复用宿主登录态（Session/Cookie/JWT/SSO）
+- **宿主系统挂载** - 可作为 FastAPI 子应用挂载，复用宿主登录态（Session/Cookie/JWT/Custom Token/自定义桥接）
 - **插件化架构** - 路由策略、业务工具、行业适配、鉴权桥接、回复后处理均可插件扩展
 - **行业增强** - 内置电商、SaaS、教育、物流、CRM 等行业适配器，支持自定义行业
 - **RAG 知识增强** - 多租户知识库管理，支持向量检索与引用溯源
@@ -32,6 +32,9 @@
 - **自动切片优化** - 基于当前切片统计给出推荐 `chunk_max_tokens` / `chunk_overlap`，并可一键生成优化版本
 - **知识版本管理** - 支持版本快照、激活切换与回滚，检索与引用按激活版本隔离
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
+- **低成本治理** - 文本链路记录 LLM token 估算、成本估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存
+- **可复现 RAG 评测** - 提供本地 eval cases 与脚本，验证 route、引用关键词、有效命中率和失败明细
+- **人工接管队列** - 基于 Session 的单实例轻量队列，支持技能组、优先级、等待时间排序和 claim-next 认领
 
 ## 架构概览
 
@@ -205,6 +208,25 @@ runtime.register_plugin(MyAuthBridgePlugin())
 
 更多示例见 [examples/](examples/) 目录。
 
+### 面试演示与 RAG 评测
+
+本仓库提供不依赖付费外部服务的本地演示闭环，默认使用 `local` LLM / Vector / Business provider：
+
+```powershell
+# 完整质量门禁
+powershell -ExecutionPolicy Bypass -File scripts\test.ps1
+
+# RAG 质量评测：route、引用关键词、有效命中率、失败明细
+.venv\Scripts\python.exe scripts\eval_rag.py
+
+# 面试演示：知识问答、缓存命中、业务工具、转人工队列、成本摘要、RAG eval
+.venv\Scripts\python.exe examples\interview_demo.py
+# 或
+powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
+```
+
+演示输出包含 `route`、`citations`、`tool_result`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。
+
 ## 插件扩展
 
 平台提供以下扩展点：
@@ -214,7 +236,7 @@ runtime.register_plugin(MyAuthBridgePlugin())
 | `RouteStrategyPlugin` | 路由决策 | 自定义分流策略 |
 | `BusinessToolPlugin` | 业务工具 | 订单查询、物流追踪 |
 | `IndustryAdapterPlugin` | 行业适配 | 电商、SaaS、教育 |
-| `AuthBridgePlugin` | 鉴权桥接 | SSO、自定义Token |
+| `AuthBridgePlugin` | 鉴权桥接 | Custom Token、自定义桥接 |
 | `ContextEnricherPlugin` | 上下文增强 | 用户画像注入 |
 | `ResponsePostProcessorPlugin` | 回复后处理 | 脱敏、多语言 |
 | `HumanHandoffPlugin` | 人工协同 | 转人工策略 |
@@ -246,17 +268,28 @@ runtime.register_plugin(OrderStatusTool())
 | 文档 | 说明 |
 |------|------|
 | [docs/project-overview.md](docs/project-overview.md) | 项目总览与目标 |
+| [docs/business-requirements.md](docs/business-requirements.md) | 业务需求、场景与成功指标 |
 | [docs/architecture.md](docs/architecture.md) | 总体架构设计 |
 | [docs/module-design.md](docs/module-design.md) | 模块详细设计 |
+| [docs/adapter-design.md](docs/adapter-design.md) | 适配器与业务增强边界 |
 | [docs/api.md](docs/api.md) | API 接口文档 |
 | [docs/business-enhancement.md](docs/business-enhancement.md) | 业务增强设计 |
 | [docs/auth-bridge.md](docs/auth-bridge.md) | 宿主桥接与鉴权 |
 | [docs/plugin-system.md](docs/plugin-system.md) | 插件系统设计 |
-| [docs/roadmap.md](docs/roadmap.md) | 实施路线图 |
 | [docs/deployment.md](docs/deployment.md) | 部署指南 |
 | [docs/events.md](docs/events.md) | 诊断事件与埋点约定 |
 | [docs/slo.md](docs/slo.md) | 性能口径与 SLO |
 | [docs/storage.md](docs/storage.md) | 存储与多实例说明 |
+| [docs/testing.md](docs/testing.md) | 测试分层、命令与验收重点 |
+| [docs/roadmap.md](docs/roadmap.md) | 实施路线图 |
+| [docs/progress-control.md](docs/progress-control.md) | 当前进展、风险和交付检查 |
+| [docs/TODO.md](docs/TODO.md) | 下一步待办和暂不声明能力 |
+| [docs/interview-playbook.md](docs/interview-playbook.md) | 面试追问手册与本地验证路径 |
+
+面试与简历材料：
+
+- [STAR-HIGHLIGHTS.md](STAR-HIGHLIGHTS.md)：项目亮点、技术难点、解决方案与 STAR 表达
+- [RESUME_SNIPPETS.md](RESUME_SNIPPETS.md)：简历和作品集可复用片段
 
 ## 测试
 
@@ -333,7 +366,7 @@ ruff check .
 mypy src
 ```
 
-当前仓库 CI 门禁见 `.github/workflows/ci.yml`：`ruff check`、`ruff format --check`、`python -m compileall`、`mypy`、`pytest`。
+当前本地质量门禁由 `scripts/test.ps1` 串联执行：`ruff check`、`ruff format --check`、`python -m compileall`、`mypy`、`pytest`。当前仓库未包含远端 CI workflow，不宣称远端 CI 已落地。
 
 ## 许可证
 

@@ -4,6 +4,7 @@ import json
 import os
 from collections import Counter
 from pathlib import Path
+from time import time
 from typing import Any
 
 from customer_ai_runtime.core.diagnostics_export import DiagnosticsJsonlExporter
@@ -49,6 +50,7 @@ class RuntimeConfigService:
         self._policies = PolicyConfig()
         self._alerts = AlertRuleConfig()
         self._plugin_states: dict[str, bool] = {}
+        self._response_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._load()
 
     def get_prompts(self) -> PromptConfig:
@@ -64,8 +66,32 @@ class RuntimeConfigService:
 
     def update_policies(self, data: dict[str, Any]) -> PolicyConfig:
         self._policies = self._policies.model_copy(update=data)
+        if (
+            not self._policies.response_cache_enabled
+            or self._policies.response_cache_ttl_seconds <= 0
+        ):
+            self._response_cache.clear()
         self._flush()
         return self.get_policies()
+
+    def get_cached_response(self, cache_key: str) -> dict[str, Any] | None:
+        policies = self._policies
+        if not policies.response_cache_enabled or policies.response_cache_ttl_seconds <= 0:
+            return None
+        cached = self._response_cache.get(cache_key)
+        if cached is None:
+            return None
+        created_at, payload = cached
+        if time() - created_at > policies.response_cache_ttl_seconds:
+            self._response_cache.pop(cache_key, None)
+            return None
+        return json.loads(json.dumps(payload))
+
+    def set_cached_response(self, cache_key: str, payload: dict[str, Any]) -> None:
+        policies = self._policies
+        if not policies.response_cache_enabled or policies.response_cache_ttl_seconds <= 0:
+            return
+        self._response_cache[cache_key] = (time(), json.loads(json.dumps(payload)))
 
     def get_plugin_states(self) -> dict[str, bool]:
         return dict(self._plugin_states)

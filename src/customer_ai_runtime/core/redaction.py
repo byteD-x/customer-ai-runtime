@@ -36,6 +36,12 @@ def sanitize_context(context: dict[str, Any]) -> dict[str, Any]:
 
 def _sanitize_value(key: str, value: Any) -> Any:
     lowered = key.lower()
+    if lowered.endswith("_tokens") or lowered in {
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+    }:
+        return value
     if any(word in lowered for word in _SENSITIVE_KEYWORDS):
         return "***"
     if isinstance(value, str):

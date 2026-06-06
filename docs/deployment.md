@@ -149,6 +149,10 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
   通过 `GET /api/v1/admin/metrics` 和 `GET /api/v1/admin/metrics/summary` 采集业务计数
 - 诊断排障
   通过 `GET /api/v1/admin/diagnostics` 和 `GET /api/v1/admin/sessions/{session_id}/monitor` 定位会话异常
+- 成本与缓存观察
+  通过 `GET /api/v1/admin/costs/summary` 查看当前诊断样本中的 token、估算成本、缓存命中和预算告警
+- 人工接管队列
+  通过 `GET /api/v1/admin/handoff/queue` 查看单实例等待队列，通过 `POST /api/v1/admin/handoff/claim-next` 做管理端认领
 - 告警拉取
   通过 `GET /api/v1/admin/alerts` 拉取 provider 未就绪、错误诊断、等待人工会话等告警线索
   告警阈值可通过 `PUT /api/v1/admin/runtime-config` 的 `alerts` 字段热更新
@@ -169,6 +173,10 @@ curl http://127.0.0.1:8000/healthz
 curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/providers/health
 curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/metrics/summary
 curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
+
+# 以下接口沿用上方管理端认证 Header：
+# http://127.0.0.1:8000/api/v1/admin/costs/summary
+# http://127.0.0.1:8000/api/v1/admin/handoff/queue?tenant_id=demo-tenant
 ```
 
 预期结果：
@@ -176,7 +184,18 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 - `/healthz` 返回 `status=ok`
 - `providers/health` 返回各提供商 `ready` 状态
 - `metrics/summary` 返回计数器、会话摘要和诊断摘要
+- `costs/summary` 返回当前样本的 token、估算成本、缓存命中和预算告警
+- `handoff/queue` 返回当前租户等待人工接管的单实例队列；无等待会话时为空数组
 - `alerts` 返回需要运维关注的问题列表；无异常时可为空数组
+
+本地演示与评测验证：
+
+```powershell
+.venv\Scripts\python.exe scripts\eval_rag.py
+.venv\Scripts\python.exe examples\interview_demo.py
+```
+
+上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省或生产压测结果。
 
 ## 7. 当前限制
 
@@ -185,6 +204,9 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 - 观测能力以管理接口和本地持久化事件为主，尚未内建 Prometheus exporter
 - Docker Compose 适合单机或小规模环境，不等同于高可用生产集群方案
 - 当前存储层仍以本地 JSON 仓储为主，更适合开发、演示和轻量部署
+- 当前人工接管队列基于本地 `Session` 状态排序，未提供多实例原子认领
+- 当前成本统计为本地估算与 provider usage 的治理入口，未内置真实模型价格表和租户账单结算
+- 当前 RAG eval 为离线小样本脚本，未接入真实标注集、灰度流量和人工复核
 
 ## 7.1 安全与保护性配置（当前实现）
 
@@ -199,6 +221,9 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 以下属于未来目标，不代表当前仓库已落地：
 
 - 多实例无状态部署与共享持久化后端
+- 多实例人工队列与原子认领
+- 基于真实模型价格表和 provider usage 的租户成本核算
+- 基于业务标注集和线上灰度流量的 RAG 质量评估
 - Prometheus / Grafana 原生指标暴露
 - 专用告警推送通道（Webhook、短信、IM）
 - 更细粒度的审计日志与租户级运维视图

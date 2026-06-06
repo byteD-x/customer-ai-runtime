@@ -20,7 +20,7 @@
 - 帮助文档
 - FAQ
 
-处理方式：RAG
+处理方式：RAG。若存在有效引用、知识版本和 prompt hash 受控，且没有宿主敏感上下文，可进入安全响应缓存。
 
 ### 2.2 行业静态知识
 
@@ -30,7 +30,7 @@
 - 物流赔付与签收规则
 - CRM 服务等级规则
 
-处理方式：行业知识域 + RAG
+处理方式：行业知识域 + RAG。行业知识仍属于静态知识，缓存策略必须绑定 `tenant_id`、`knowledge_base_id`、`version_id` 和引用片段。
 
 ### 2.3 实时业务数据
 
@@ -41,7 +41,7 @@
 - 学习进度
 - 订阅状态
 
-处理方式：业务工具插件 / 业务适配器 / 实时 API
+处理方式：业务工具插件 / 业务适配器 / 实时 API。实时业务数据不进入通用知识库，也不走知识问答缓存。
 
 ### 2.4 当前会话与页面上下文
 
@@ -59,9 +59,11 @@
 2. `BusinessContextBuilder` 合并宿主身份、页面、对象、行为上下文。
 3. `RouteStrategyPlugin` 判断知识、业务、人工、高风险或插件路由。
 4. 知识型问题走 `KnowledgeDomainManager + RAG`。
-5. 业务型问题走 `Real-time Business Data Provider`。
-6. `Response Enhancement Orchestrator` 合并知识引用、动态数据和上下文。
-7. `ResponsePostProcessorPlugin` 做格式化、脱敏、多语言和结构化转换。
+5. 知识型问题满足安全条件时可读写响应缓存，缓存命中时不再调用 LLM。
+6. 业务型问题走 `Real-time Business Data Provider`，结果保持实时，不缓存。
+7. `Response Enhancement Orchestrator` 合并知识引用、动态数据和上下文。
+8. `ResponsePostProcessorPlugin` 做格式化、脱敏、多语言和结构化转换。
+9. Chat 链路记录 usage、cache hit、估算成本和预算状态，供管理端成本摘要聚合。
 
 ## 4. 行业增强策略
 
@@ -101,3 +103,5 @@
 - 行业规则必须通过行业适配器与插件声明。
 - 同一租户可装配多个行业插件，但单次请求只使用一个主行业上下文。
 - 实时业务数据不得写入通用知识库代替实时查询。
+- 低成本治理不能牺牲业务正确性：只缓存安全知识问答，不缓存订单、物流、售后、账号、工单等实时查询。
+- RAG eval 只用于离线 case 回归，应同时检查 route、引用关键词和有效命中；不能把小样本通过率写成线上准确率。

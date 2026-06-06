@@ -14,6 +14,7 @@ from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.application.tool_catalog import ToolCatalogService
 from customer_ai_runtime.application.voice_rtc import RTCService
 from customer_ai_runtime.core.config import Settings
+from customer_ai_runtime.domain.models import Session
 
 
 def _percentile_ms(values: list[int], quantile: float) -> float | None:
@@ -58,8 +59,74 @@ class AdminService:
             for session in self.session_service.list_by_tenant(tenant_id)
         ]
 
+    def list_handoff_queue(
+        self,
+        tenant_id: str,
+        skill_group: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return [
+            self._handoff_queue_item(session)
+            for session in self._waiting_handoff_sessions(tenant_id, skill_group)
+        ]
+
+    def claim_next_handoff(
+        self,
+        tenant_id: str,
+        skill_group: str | None = None,
+        operator_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        sessions = self._waiting_handoff_sessions(tenant_id, skill_group)
+        if not sessions:
+            return None
+        claimed = self.session_service.claim_human(
+            tenant_id,
+            sessions[0].session_id,
+            operator_id=operator_id,
+        )
+        return self._handoff_queue_item(claimed)
+
     def get_metrics(self) -> dict[str, Any]:
         return self.metrics.snapshot()
+
+    def get_cost_summary(self, tenant_id: str | None = None) -> dict[str, Any]:
+        events = self.diagnostics_service.query(
+            tenant_id=tenant_id,
+            code_prefix="chat.cost_recorded",
+            limit=500,
+        )
+        provider_summary: dict[str, dict[str, Any]] = {}
+        route_summary: dict[str, dict[str, Any]] = {}
+        total_tokens = 0
+        total_cost = 0.0
+        cache_hits = 0
+        alert_count = 0
+        for event in events:
+            context = event.context
+            provider = str(context.get("provider") or "unknown")
+            route = str(context.get("route") or "unknown")
+            tokens = int(context.get("total_tokens") or 0)
+            cost = float(context.get("estimated_cost_cents") or 0.0)
+            cache_hit = bool(context.get("cache_hit"))
+            total_tokens += tokens
+            total_cost += cost
+            if cache_hit:
+                cache_hits += 1
+            if context.get("budget_status") == "alert":
+                alert_count += 1
+            self._accumulate_cost(provider_summary, provider, tokens, cost, cache_hit)
+            self._accumulate_cost(route_summary, route, tokens, cost, cache_hit)
+        request_count = len(events)
+        return {
+            "tenant_id": tenant_id,
+            "sample_size": request_count,
+            "total_tokens": total_tokens,
+            "estimated_cost_cents": round(total_cost, 6),
+            "cache_hits": cache_hits,
+            "cache_hit_rate": 0.0 if request_count == 0 else round(cache_hits / request_count, 4),
+            "budget_alerts": alert_count,
+            "by_provider": provider_summary,
+            "by_route": route_summary,
+        }
 
     def get_metrics_summary(self, tenant_id: str | None = None) -> dict[str, Any]:
         sessions = self.session_service.list_by_tenant(tenant_id) if tenant_id else []
@@ -676,6 +743,69 @@ class AdminService:
 
     def disable_plugin(self, plugin_id: str) -> dict[str, Any]:
         return self.plugin_registry.disable(plugin_id).model_dump(mode="json")
+
+    def _waiting_handoff_sessions(
+        self,
+        tenant_id: str,
+        skill_group: str | None = None,
+    ) -> list[Session]:
+        sessions = [
+            session
+            for session in self.session_service.list_by_tenant(tenant_id)
+            if session.waiting_human
+        ]
+        if skill_group:
+            sessions = [
+                session for session in sessions if session.handoff_skill_group == skill_group
+            ]
+        sessions.sort(
+            key=lambda session: (
+                -session.handoff_priority,
+                session.handoff_enqueued_at or session.updated_at,
+            )
+        )
+        return sessions
+
+    def _handoff_queue_item(self, session: Session) -> dict[str, Any]:
+        return {
+            "tenant_id": session.tenant_id,
+            "session_id": session.session_id,
+            "state": session.state.value,
+            "waiting_human": session.waiting_human,
+            "handoff_reason": session.handoff_reason,
+            "skill_group": session.handoff_skill_group,
+            "priority": session.handoff_priority,
+            "enqueued_at": None
+            if session.handoff_enqueued_at is None
+            else session.handoff_enqueued_at.isoformat(),
+            "assigned_operator_id": session.assigned_operator_id,
+            "message_count": len(session.messages),
+            "last_intent": session.last_intent,
+            "last_route": None if session.last_route is None else session.last_route.value,
+        }
+
+    def _accumulate_cost(
+        self,
+        summary: dict[str, dict[str, Any]],
+        key: str,
+        tokens: int,
+        cost: float,
+        cache_hit: bool,
+    ) -> None:
+        bucket = summary.setdefault(
+            key,
+            {
+                "request_count": 0,
+                "total_tokens": 0,
+                "estimated_cost_cents": 0.0,
+                "cache_hits": 0,
+            },
+        )
+        bucket["request_count"] += 1
+        bucket["total_tokens"] += tokens
+        bucket["estimated_cost_cents"] = round(bucket["estimated_cost_cents"] + cost, 6)
+        if cache_hit:
+            bucket["cache_hits"] += 1
 
     def _knowledge_effectiveness_recommendation(
         self,

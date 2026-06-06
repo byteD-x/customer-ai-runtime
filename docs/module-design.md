@@ -11,6 +11,8 @@
 | Voice Service | ASR + 文本链路 + TTS | 音频载荷 | 文本结果 + 音频结果 |
 | RTC Service | 房间与通话状态机 | RTC 事件 | RTC 输出事件 |
 | Handoff Service | 转人工策略与交接包 | 会话、原因、策略 | `HandoffPackage` |
+| Cost Governance | LLM 用量、缓存命中与成本摘要 | Chat 响应、诊断事件 | `usage` / `cost_summary` |
+| RAG Evaluation | 离线 RAG case 评测 | eval cases、chat results | `rag_eval_summary` |
 | Auth Service | API Key / Host Bridge 认证 | Header / Cookie / Token | `AuthContext` |
 | Plugin Registry | 插件注册、发现、启停、优先级 | 插件元数据 | 可执行插件集合 |
 | Business Context Builder | 合并宿主、页面、行为、会话上下文 | 请求与宿主上下文 | `BusinessContext` |
@@ -41,6 +43,8 @@
 - `KnowledgeChunk`
 - `BusinessResult`
 - `HandoffPackage`
+- `LLMUsage`
+- `CostRecord`
 - `RTCRoom`
 - `HostAuthContext`
 - `BusinessContext`
@@ -68,6 +72,11 @@
 - `first_response_time`
 - `avg_response_time`
 - 消息级 `feedback_type` / `feedback_comment` / `feedback_submitted_at`
+- `handoff_reason`
+- `handoff_skill_group`
+- `handoff_priority`
+- `handoff_enqueued_at`
+- `assigned_operator_id`
 
 ### 状态机
 
@@ -144,6 +153,8 @@
 - `KnowledgeService` 支持知识版本快照、版本激活与基于统计结果的切片优化报告 / 应用
 - 当检索后没有有效引用时，写入 `knowledge.retrieve_miss` 诊断事件，供管理端聚合知识缺口
 - 当检索命中有效引用时，写入知识命中诊断与版本标记，用于后续知识库效果分析
+- 知识问答在无宿主敏感上下文、存在引用、知识版本和 prompt hash 受控时可进入安全缓存
+- `scripts/eval_rag.py` 通过真实 API 链路评估 route、引用关键词、有效命中阈值和失败明细
 
 ## 6. 业务工具模块
 
@@ -302,7 +313,27 @@
 - 多语言
 - 结构化输出
 
-## 12. 管理模块
+## 12. 成本治理模块
+
+### 输入
+
+- LLM provider 返回或本地估算的 `LLMUsage`
+- route、provider、channel、session、cache_hit
+- `PolicyConfig.cost_alert_estimated_cents`
+
+### 输出
+
+- Chat 响应字段：`usage`、`cache_hit`、`estimated_cost_cents`、`budget_status`
+- 诊断事件：`chat.cost_recorded`
+- 管理端聚合：`GET /api/v1/admin/costs/summary`
+
+### 设计取舍
+
+- 本地 provider 默认估算 token，用于演示治理链路；真实 provider 可优先使用 SDK usage。
+- 知识问答缓存命中时 usage 归零，便于观察缓存节省的请求。
+- 业务工具查询不缓存，避免实时订单、物流、售后状态过期。
+
+## 13. 管理模块
 
 ### 管理对象
 
@@ -312,6 +343,9 @@
 - Diagnostics
 - Knowledge health report
 - Retrieval miss report
+- Cost summary
+- Handoff queue
+- RAG eval scripts
 - Plugin 状态
 - Provider 健康状态
 
@@ -321,13 +355,17 @@
 - `resolution_summary`
 - `feedback_summary`
 - `response_time_summary`
+- `cost_summary`
+- `handoff_queue`
 
 ### 失败方式
 
 - 非管理员返回 `forbidden`
 - 配置校验失败返回 `validation_error`
 
-## 13. 与 Future Target 的边界
+## 14. 与 Future Target 的边界
 
 - 当前交付以单体参考实现为主。
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
+- 当前人工接管队列是基于 `Session` 的单实例轻量队列；Redis sorted set / 数据库事务认领属于 future target。
+- 当前 RAG eval 是本地 case 评测，不代表线上准确率。

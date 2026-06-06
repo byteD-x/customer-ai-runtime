@@ -561,6 +561,19 @@ async def admin_metrics_summary(
     return success_response(container.admin_service.get_metrics_summary(tenant_id=tenant_id))
 
 
+@router.get("/api/v1/admin/costs/summary")
+async def admin_cost_summary(
+    request: Request,
+    tenant_id: str | None = Query(default=None, min_length=1, max_length=64),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_staff(auth_context)
+    if tenant_id is not None:
+        container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(container.admin_service.get_cost_summary(tenant_id=tenant_id))
+
+
 @router.get("/api/v1/admin/sessions")
 async def admin_sessions(
     tenant_id: str,
@@ -571,6 +584,39 @@ async def admin_sessions(
     require_staff(auth_context)
     container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.list_sessions(tenant_id))
+
+
+@router.get("/api/v1/admin/handoff/queue")
+async def admin_handoff_queue(
+    tenant_id: str,
+    request: Request,
+    skill_group: str | None = Query(default=None, min_length=1, max_length=64),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_staff(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(container.admin_service.list_handoff_queue(tenant_id, skill_group))
+
+
+@router.post("/api/v1/admin/handoff/claim-next")
+async def admin_claim_next_handoff(
+    tenant_id: str,
+    request: Request,
+    skill_group: str | None = Query(default=None, min_length=1, max_length=64),
+    operator_id: str | None = Query(default=None, min_length=1, max_length=64),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    return success_response(
+        container.admin_service.claim_next_handoff(
+            tenant_id,
+            skill_group=skill_group,
+            operator_id=operator_id,
+        )
+    )
 
 
 @router.get("/api/v1/admin/prompts")

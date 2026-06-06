@@ -10,6 +10,16 @@
 - 诊断事件：`<storage_root>/state/diagnostics.json`
 - 运行时配置：`<storage_root>/state/runtime_config.json`
 
+人工接管队列当前不是独立消息队列，而是复用 `Session` 状态字段形成单实例轻量队列：
+
+- `handoff_reason`
+- `handoff_skill_group`
+- `handoff_priority`
+- `handoff_enqueued_at`
+- `assigned_operator_id`
+
+管理端 `GET /api/v1/admin/handoff/queue` 基于当前租户的 `waiting_human` 会话做内存排序；`POST /api/v1/admin/handoff/claim-next` 认领后把会话状态切到 `human_in_service`。该实现适合本地演示、单实例部署和面试项目验证。
+
 ## 2. 已知限制
 
 - 不适合多实例并发写入与强一致需求
@@ -18,6 +28,7 @@
 ## 3. 迁移建议（future target）
 
 - 抽象 repository 接口并新增可选实现（Postgres/Redis），保留 JSON 作为 dev fallback
+- 人工接管队列可迁移为 Redis sorted set：score 使用 `priority` 与 `enqueued_at` 组合，value 存 `tenant_id/session_id/skill_group`，认领使用原子 pop 或 Lua 脚本；当前仓库未落地该多实例实现。
 - 采用可回滚迁移策略：
   - 只读迁移或双写一段时间
   - 明确回滚开关与数据一致性检查

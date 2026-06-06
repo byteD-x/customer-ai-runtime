@@ -2,7 +2,7 @@
 
 ## 1. 设计目标
 
-平台目标是在统一客服引擎上，支持文本、语音、RTC、多行业增强、宿主系统挂载、自定义鉴权桥接和插件化扩展。
+平台目标是在统一客服引擎上，支持文本、语音、RTC、多行业增强、宿主系统挂载、自定义鉴权桥接、插件化扩展、低成本治理、RAG 质量评测和人工接管队列。
 
 ## 2. 当前事实与 Target State
 
@@ -10,11 +10,12 @@
 
 - 已有单体参考实现，可运行文本、语音、RTC、知识库、基础工具与人工协同。
 - 运行模式支持独立 FastAPI 与宿主 FastAPI 挂载。
+- 已落地成本摘要、知识问答安全缓存、RAG eval 脚本与单实例人工接管队列。
 
 ### 2.2 Target State
 
-- 在现有单体参考实现上，引入平台级 `Auth Bridge`、插件平台和业务增强层。
 - 保持单体可运行，同时保留未来拆分为多服务的边界。
+- 多实例人工接管队列、真实模型账单计费、真实业务标注集评测属于 future target。
 
 ## 3. 分层架构
 
@@ -58,7 +59,8 @@
 ┌──────────────────────────────────────────────────────────────┐
 │ 运营管理层                                                   │
 │ Prompt | Policy | Knowledge | Plugin Admin | Metrics        │
-│ Diagnostics | 灰度与回滚                                     │
+│ Diagnostics | Cost Summary | RAG Eval | Handoff Queue       │
+│ 灰度与回滚                                                    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -80,6 +82,7 @@
 - `Session` 管理会话生命周期。
 - `Route Orchestrator` 决定知识、业务、人工、高风险、插件路线，并执行置信度分层。
 - `LLM Orchestrator` 融合检索结果、实时数据和上下文。
+- `Cost Governance` 记录 usage、cache hit、估算成本和预算状态。
 - `RTC` 服务直接处理实时热路径，不通过事件总线。
 
 ### 4.4 业务增强层
@@ -88,6 +91,7 @@
 - `Knowledge Domain Manager` 管理不同租户、行业下的知识域。
 - `Real-time Business Data Provider` 通过业务工具插件读取动态数据。
 - `Response Enhancement Orchestrator` 统一做引用、风格、脱敏和结构化输出后处理。
+- `RAG Eval` 不进入在线热路径，作为离线脚本验证 route、引用关键词和有效命中。
 
 ### 4.5 插件平台层
 
@@ -107,10 +111,19 @@
 7. `Route Orchestrator` 结合 `page_context`、`business_objects`、`intent_stack` 对候选结果做动态加权。
 8. 若路由置信度不足，先走澄清兜底；若连续低置信度或存在挫败信号，则升级转人工。
 9. 若为知识型：`Knowledge Domain Manager` 解析知识域并检索。
-10. 若为业务型：`Business Tool Plugins` 或 `BusinessAdapter` 调实时接口。
-11. `LLM / Response Enhancement` 生成回复。
-12. `Human Handoff Plugins` 判断是否转人工。
-13. `Response Post Processor Plugins` 完成脱敏、格式化、多语言或结构化输出。
+10. 若为知识型且满足安全条件：尝试读取知识问答缓存；命中时不再调用 LLM。
+11. 若为业务型：`Business Tool Plugins` 或 `BusinessAdapter` 调实时接口，业务结果不缓存。
+12. `LLM / Response Enhancement` 生成回复。
+13. `Human Handoff Plugins` 判断是否转人工，并写入接管队列字段。
+14. 记录 usage、cache hit、估算成本、预算状态与诊断事件。
+15. `Response Post Processor Plugins` 完成脱敏、格式化、多语言或结构化输出。
+
+### 5.4 面试演示与离线评测链路
+
+1. `examples/interview_demo.py` 使用本地临时存储和默认 provider 启动 TestClient。
+2. 依次演示知识问答、重复知识问答缓存命中、业务工具查询、风险转人工、队列认领、成本摘要。
+3. `scripts/eval_rag.py` 使用本地 eval cases 验证 route、引用关键词、有效命中率和失败明细。
+4. 该链路用于可复现演示，不代表线上准确率或生产压测结果。
 
 ### 5.2 语音请求
 
@@ -145,6 +158,8 @@
 - 单体 FastAPI 参考实现
 - 本地 JSON 持久化
 - 可选 OpenAI / Qdrant / HTTP Business Adapter
+- 单实例 handoff queue 基于 `Session` 状态字段排序
+- RAG eval 与 interview demo 默认只依赖本地 provider
 
 ### 7.2 Future Target
 
@@ -163,3 +178,5 @@
 - 实时语音热路径不经过事件总线。
 - 静态知识与实时业务数据必须分离处理。
 - 认证与上下文映射必须插件化，不把宿主逻辑写死到主流程。
+- 成本治理必须区分知识问答缓存与实时业务查询，不能用缓存牺牲业务正确性。
+- 离线 eval 只证明当前 case 可复现，不宣称线上准确率。

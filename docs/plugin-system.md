@@ -45,6 +45,7 @@ class PluginRegistry:
 ### 3.2 BusinessToolPlugin
 
 - 订单、商品、会员、物流、工单、课程、自定义查询
+- 当前内置工具覆盖 ecommerce / saas / education / logistics / crm 的常见查询；实时业务查询不得走知识问答缓存
 
 ### 3.3 HumanHandoffPlugin
 
@@ -52,6 +53,7 @@ class PluginRegistry:
 - 会话摘要
 - 推荐回复
 - 升级策略
+- 当前交接后会写入 `Session` 的 `handoff_reason`、`handoff_skill_group`、`handoff_priority` 和 `handoff_enqueued_at`，供单实例管理队列排序
 
 ### 3.4 IndustryAdapterPlugin
 
@@ -59,7 +61,7 @@ class PluginRegistry:
 
 ### 3.5 AuthBridgePlugin
 
-- API Key / Session / JWT / SSO / Custom Host Auth
+- API Key / Session / JWT / Custom Token / Custom Host Auth
 
 ### 3.6 ContextEnricherPlugin
 
@@ -123,19 +125,32 @@ class PluginRegistry:
 
 ## 8. 管理接口
 
-目标支持：
+当前已落地：
 
 - 查询插件列表
-- 查询插件能力
 - 启用插件
 - 禁用插件
-- 查看装配结果
+- 查看插件元数据、能力、作用域、优先级和启停状态
+- 插件启停状态可通过运行时配置持久化，服务重启后恢复
+
+当前接口：
+
+- `GET /api/v1/admin/plugins`
+- `POST /api/v1/admin/plugins/{plugin_id}/enable`
+- `POST /api/v1/admin/plugins/{plugin_id}/disable`
+
+Future Target：
+
+- 查看某个租户 / 行业 / 渠道下的最终装配结果
+- 更细粒度的租户级优先级覆盖、灰度发布和远程插件分发
 
 ## 9. 当前事实与 Target State
 
 ### 当前事实
 
 - 当前仓库已具备完整平台插件框架，已接入路由、业务工具、人工协同、行业适配、鉴权桥接、上下文增强和回复后处理。
+- 插件状态已经纳入运行时配置，可通过 Admin API 启停并持久化。
+- 当前插件执行仍在单体进程内完成，未提供远程插件运行时。
 
 ### Target State
 

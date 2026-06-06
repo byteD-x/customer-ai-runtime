@@ -16,6 +16,7 @@ from customer_ai_runtime.domain.models import (
     ASRResult,
     LLMRequest,
     LLMResponse,
+    LLMUsage,
     TTSRequest,
     TTSResult,
 )
@@ -67,7 +68,12 @@ class OpenAILLMProvider(LLMProvider):
             input=prompt,
         )
         output_text = response.output_text or "抱歉，我暂时没有生成有效答案。"
-        return LLMResponse(answer=output_text, confidence=0.78, citations=request.citations)
+        return LLMResponse(
+            answer=output_text,
+            confidence=0.78,
+            citations=request.citations,
+            usage=_usage_from_response(response),
+        )
 
 
 class OpenAIASRProvider(ASRProvider):
@@ -113,3 +119,18 @@ def _build_client(settings: Settings) -> AsyncOpenAI:
             status_code=503,
         )
     return AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+
+
+def _usage_from_response(response: Any) -> LLMUsage | None:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+    total_tokens = int(getattr(usage, "total_tokens", input_tokens + output_tokens) or 0)
+    return LLMUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens or input_tokens + output_tokens,
+        estimated=False,
+    )

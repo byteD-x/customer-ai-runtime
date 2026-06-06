@@ -5,8 +5,12 @@
 - 会话级：`first_response_time`、`avg_response_time`（见会话模型字段）
 - 诊断级：部分事件包含 `duration_ms`（例如 `chat.completed`、`voice.turn_completed`）
 - 管理接口汇总：`GET /api/v1/admin/metrics/summary` 的 `response_time_summary`
+- 成本治理：`chat.cost_recorded` 诊断事件与 `GET /api/v1/admin/costs/summary`
+- 缓存命中：Chat 响应字段 `cache_hit`，成本摘要中的 `cache_hits` / `cache_hit_rate`
+- 人工队列：`GET /api/v1/admin/handoff/queue` 返回当前单实例等待队列
+- 离线 RAG eval：`scripts/eval_rag.py` 输出 `pass_rate`、`effective_hit_rate` 和失败明细
 
-说明：分位数统计（p50/p95）当前基于“最近诊断样本”（受查询上限影响），用于快速排障与趋势观察，不等同于全量离线统计口径。
+说明：分位数统计（p50/p95）当前基于“最近诊断样本”（受查询上限影响），用于快速排障与趋势观察，不等同于全量离线统计口径。成本、缓存、队列和 RAG eval 当前也属于本地治理与演示口径，不代表真实账单、线上准确率或生产 SLA。
 
 ## 2. 建议的稳定口径（对齐验收）
 
@@ -15,4 +19,14 @@
   - 统计窗口（最近 N 条 / 最近 5 分钟）
   - 稳态还是冷启动
   - 是否包含外部 provider 耗时
+- `estimated_cost_cents`：区分估算 usage 与 provider 原生 usage；真实账单需要模型价格表、币种和结算周期
+- `cache_hit_rate`：仅统计安全知识问答缓存，不把实时业务查询纳入可缓存口径
+- `handoff_wait_ms`：从 `handoff_enqueued_at` 到认领成功的等待时长，按 `skill_group` 聚合 p50/p95
+- `rag_eval_pass_rate`：仅用于离线 case 回归；线上口径必须基于标注集、灰度流量和人工复核
 
+## 3. Future Target
+
+- 将当前内存/JSON 样本统计迁移为可持久化、可窗口聚合的指标后端。
+- 为真实 provider usage 接入价格表，区分模型、租户、route 和缓存节省。
+- 将单实例 handoff queue 指标迁移到多实例队列或数据库事务口径。
+- 将 RAG eval 从本地小样本扩展为业务标注集和线上反馈闭环。

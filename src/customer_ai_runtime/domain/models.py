@@ -120,6 +120,11 @@ class Session(BaseModel):
     first_response_time: int | None = None
     avg_response_time: float | None = None
     response_count: int = 0
+    handoff_reason: str = ""
+    handoff_skill_group: str = "general"
+    handoff_priority: int = 0
+    handoff_enqueued_at: datetime | None = None
+    assigned_operator_id: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -249,6 +254,25 @@ class HandoffPackage(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class LLMUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    estimated: bool = True
+
+
+class CostRecord(BaseModel):
+    tenant_id: str
+    session_id: str
+    provider: str
+    route: RouteType
+    cache_hit: bool = False
+    usage: LLMUsage = Field(default_factory=LLMUsage)
+    estimated_cost_cents: float = 0.0
+    budget_status: str = "ok"
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class LLMRequest(BaseModel):
     tenant_id: str
     session_id: str
@@ -266,6 +290,7 @@ class LLMResponse(BaseModel):
     confidence: float
     citations: list[Citation] = Field(default_factory=list)
     suggested_actions: list[str] = Field(default_factory=list)
+    usage: LLMUsage | None = None
 
 
 class ASRRequest(BaseModel):
@@ -308,6 +333,9 @@ class PolicyConfig(BaseModel):
     route_fallback_confidence_threshold: float = 0.55
     route_handoff_confidence_threshold: float = 0.3
     intent_stack_max_depth: int = 6
+    response_cache_enabled: bool = True
+    response_cache_ttl_seconds: int = 300
+    cost_alert_estimated_cents: float = 50.0
     risk_keywords: list[str] = Field(
         default_factory=lambda: ["投诉", "仲裁", "监管", "律师", "报警", "安全事故"]
     )

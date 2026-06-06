@@ -1,18 +1,12 @@
 # API 文档
 
-本文档描述 target state 接口契约。当前仓库基础接口已存在，新增的宿主桥接、插件管理与上下文接口将与本文档保持一致。
+本文档描述当前本地参考实现已落地的主要接口契约；少量生产化增强会显式标注为 future target，不写成当前事实。
 
 ## 1. 基本约定
 
 - Base URL: `http://127.0.0.1:8000`
 - 内容类型：`application/json`
 - 核心标识：`tenant_id`、`session_id`、`knowledge_base_id`
-
-### 1.3 权限约定（当前实现）
-
-- 以 `/api/v1/admin/*` 开头的读取型接口：`admin` / `operator`
-- 以 `/api/v1/admin/*` 开头的写入型接口（`PUT`/部分 `POST`）：仅 `admin`
-- 会话人工协同（`claim-human`、`messages/human`、`close`）：仅 `admin`
 
 ### 1.1 认证方式
 
@@ -23,7 +17,14 @@
 - `Cookie: host_session=<session-id>`
 - `X-Host-Token: <token>`
 
-### 1.2 通用响应
+### 1.2 权限约定（当前实现）
+
+- 以 `/api/v1/admin/*` 开头的读取型接口：`admin` / `operator`
+- 以 `/api/v1/admin/*` 开头的写入型接口（`PUT`/部分 `POST`）：仅 `admin`
+- 知识版本、切片优化等操作型管理接口即使是 `GET`，当前也要求 `admin`
+- 会话人工协同（`claim-human`、`messages/human`、`close`）：仅 `admin`
+
+### 1.3 通用响应
 
 ```json
 {
@@ -169,6 +170,10 @@
 - `handoff`
 - `host_auth_context`
 - `route_decision`
+- `cache_hit`：是否命中知识问答安全缓存；业务查询不缓存
+- `usage`：LLM token 用量，默认本地 provider 返回估算值
+- `estimated_cost_cents`：按 token 粗略估算的本轮成本，单位为美分
+- `budget_status`：`ok` / `alert`
 
 其中 `route_decision` 包含：
 
@@ -308,7 +313,49 @@
   - `feedback_summary`
   - `response_time_summary`
 
+### `GET /api/v1/admin/costs/summary`
+
+- 用途：汇总当前诊断样本中的 LLM token、估算成本、缓存命中和预算告警
+- 权限：`admin` / `operator`
+- 可选查询参数：
+  - `tenant_id`
+- 返回重点：
+  - `sample_size`
+  - `total_tokens`
+  - `estimated_cost_cents`
+  - `cache_hits`
+  - `cache_hit_rate`
+  - `budget_alerts`
+  - `by_provider`
+  - `by_route`
+
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
+
+### `GET /api/v1/admin/handoff/queue`
+
+- 用途：查看当前等待人工接管的单实例轻量队列
+- 权限：`admin` / `operator`
+- 查询参数：
+  - `tenant_id`
+  - `skill_group`（可选）
+- 排序规则：优先级倒序，同优先级按 `handoff_enqueued_at` 先后排序
+- 返回重点：
+  - `session_id`
+  - `skill_group`
+  - `priority`
+  - `handoff_reason`
+  - `enqueued_at`
+  - `assigned_operator_id`
+
+### `POST /api/v1/admin/handoff/claim-next`
+
+- 用途：按队列顺序认领下一条待人工接管会话
+- 权限：`admin`
+- 查询参数：
+  - `tenant_id`
+  - `skill_group`（可选）
+  - `operator_id`（可选）
+- 返回：认领后的队列项；无可认领会话时返回 `null`
 
 ### `GET /api/v1/admin/sessions/{session_id}/monitor?tenant_id=demo-tenant`
 
@@ -352,6 +399,9 @@
 - `route_handoff_confidence_threshold`
 - `intent_stack_max_depth`
 - `intent_return_keywords`
+- `response_cache_enabled`
+- `response_cache_ttl_seconds`
+- `cost_alert_estimated_cents`
 
 ### `GET /api/v1/admin/diagnostics`
 
@@ -384,6 +434,7 @@
 ### `GET /api/v1/admin/knowledge-bases/{knowledge_base_id}/versions`
 
 - 用途：查看知识库版本列表
+- 权限：`admin`
 - 可选查询参数：
   - `tenant_id`
 - 返回重点：
@@ -400,9 +451,11 @@
 - 用途：基于当前激活版本创建知识快照版本
 - 请求字段：
   - `tenant_id`
-  - `version_name`
   - `description`（可选）
-- 返回重点：新版本元数据与当前激活版本关系
+  - `source_version_id`（可选，不传时基于当前激活版本）
+- 返回重点：
+  - `knowledge_base`
+  - `version`
 
 ### `POST /api/v1/admin/knowledge-bases/{knowledge_base_id}/versions/{version_id}/activate`
 
@@ -411,11 +464,12 @@
   - `tenant_id`
 - 返回重点：
   - `knowledge_base`
-  - `active_version`
+  - `version`
 
 ### `GET /api/v1/admin/knowledge-bases/{knowledge_base_id}/chunk-optimization`
 
 - 用途：查看当前知识库切片优化建议
+- 权限：`admin`
 - 可选查询参数：
   - `tenant_id`
 - 返回重点：
@@ -431,13 +485,15 @@
 - 用途：按指定切片参数生成优化后的新版本，并切换为激活版本
 - 请求字段：
   - `tenant_id`
-  - `chunk_max_tokens`
-  - `chunk_overlap`
-  - `version_name`（可选）
+  - `max_tokens`
+  - `overlap`
+  - `description`（可选）
+  - `activate`（可选，默认 `true`）
 - 返回重点：
   - `knowledge_base`
   - `version`
-  - `optimization_report`
+  - `document_count`
+  - `chunk_count`
 
 ### `GET /api/v1/admin/knowledge/retrieval-misses`
 

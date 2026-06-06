@@ -124,10 +124,16 @@ class SessionService:
     def list_by_tenant(self, tenant_id: str) -> list[Session]:
         return self._repository.list_by_tenant(tenant_id)
 
-    def claim_human(self, tenant_id: str, session_id: str) -> Session:
+    def claim_human(
+        self,
+        tenant_id: str,
+        session_id: str,
+        operator_id: str | None = None,
+    ) -> Session:
         session = self.get(tenant_id, session_id)
         session.state = SessionState.HUMAN_IN_SERVICE
         session.waiting_human = False
+        session.assigned_operator_id = operator_id
         return self.save(session)
 
     def close_session(

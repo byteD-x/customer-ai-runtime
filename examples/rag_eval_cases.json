@@ -1,0 +1,51 @@
+{
+  "knowledge_base": {
+    "tenant_id": "demo-tenant",
+    "knowledge_base_id": "kb_support",
+    "name": "support",
+    "description": "Local interview RAG evaluation knowledge base",
+    "documents": [
+      {
+        "title": "refund policy",
+        "content": "Refund policy supports seven day no reason refund. Support response SLA is within 24 hours. Keep order id and payment proof.",
+        "metadata": {
+          "source": "interview-eval"
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "refund_policy_hit",
+      "question": "What is refund policy?",
+      "knowledge_base_id": "kb_support",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "refund policy",
+        "seven day no reason refund"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
+      "case_id": "support_sla_hit",
+      "question": "What is support response SLA?",
+      "knowledge_base_id": "kb_support",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "24 hours"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
+      "case_id": "low_score_miss",
+      "question": "Where is the end of universe?",
+      "knowledge_base_id": "kb_support",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [],
+      "min_score": 0.18,
+      "expect_effective_hit": false
+    }
+  ]
+}

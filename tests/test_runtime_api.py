@@ -640,6 +640,142 @@ def test_admin_retrieval_miss_report(client: TestClient) -> None:
     assert any(item["query"] == "Where is the end of the universe?" for item in data["top_queries"])
 
 
+def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
+    seed_knowledge_base(client)
+
+    first = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "退款规则是什么？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert first.status_code == 200
+    first_data = first.json()["data"]
+    assert first_data["route"] == "knowledge"
+    assert first_data["cache_hit"] is False
+    assert first_data["usage"]["total_tokens"] > 0
+
+    second = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "退款规则是什么？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert second.status_code == 200
+    second_data = second.json()["data"]
+    assert second_data["route"] == "knowledge"
+    assert second_data["cache_hit"] is True
+    assert second_data["usage"]["total_tokens"] == 0
+
+    business = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "订单 ORD-1001 发货了吗？",
+            "integration_context": {"industry": "ecommerce"},
+        },
+    )
+    assert business.status_code == 200
+    assert business.json()["data"]["route"] == "business"
+    assert business.json()["data"]["cache_hit"] is False
+
+    summary = client.get(
+        "/api/v1/admin/costs/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    cost_data = summary.json()["data"]
+    assert cost_data["sample_size"] >= 3
+    assert cost_data["cache_hits"] >= 1
+    assert cost_data["total_tokens"] > 0
+    assert "local" in cost_data["by_provider"]
+    assert "knowledge" in cost_data["by_route"]
+    assert "business" in cost_data["by_route"]
+
+
+def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> None:
+    normal = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我要转人工",
+            "integration_context": {
+                "industry": "ecommerce",
+                "skill_group": "after_sales",
+            },
+        },
+    )
+    assert normal.status_code == 200
+
+    risk = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "我要投诉监管处理",
+        },
+    )
+    assert risk.status_code == 200
+
+    queue = client.get(
+        "/api/v1/admin/handoff/queue",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert queue.status_code == 200
+    queue_data = queue.json()["data"]
+    assert len(queue_data) >= 2
+    assert queue_data[0]["priority"] >= queue_data[1]["priority"]
+    assert queue_data[0]["skill_group"] == "risk"
+
+    filtered = client.get(
+        "/api/v1/admin/handoff/queue",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant", "skill_group": "after_sales"},
+    )
+    assert filtered.status_code == 200
+    filtered_data = filtered.json()["data"]
+    assert filtered_data
+    assert all(item["skill_group"] == "after_sales" for item in filtered_data)
+
+    claim = client.post(
+        "/api/v1/admin/handoff/claim-next",
+        headers=ADMIN_HEADERS,
+        params={
+            "tenant_id": "demo-tenant",
+            "skill_group": "after_sales",
+            "operator_id": "op_1",
+        },
+    )
+    assert claim.status_code == 200
+    claimed = claim.json()["data"]
+    assert claimed["state"] == "human_in_service"
+    assert claimed["waiting_human"] is False
+    assert claimed["assigned_operator_id"] == "op_1"
+
+    after_claim = client.get(
+        "/api/v1/admin/handoff/queue",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant", "skill_group": "after_sales"},
+    )
+    assert after_claim.status_code == 200
+    assert all(item["session_id"] != claimed["session_id"] for item in after_claim.json()["data"])
+
+
 def test_admin_session_monitor_and_diagnostics_filters(client: TestClient) -> None:
     chat = client.post(
         "/api/v1/chat/messages",
