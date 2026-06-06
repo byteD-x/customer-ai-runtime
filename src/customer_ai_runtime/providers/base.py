@@ -10,6 +10,7 @@ from customer_ai_runtime.domain.models import (
     KnowledgeChunk,
     LLMRequest,
     LLMResponse,
+    LLMStreamChunk,
     RetrievalHit,
     TTSRequest,
     TTSResult,
@@ -19,6 +20,15 @@ from customer_ai_runtime.domain.models import (
 class LLMProvider(ABC):
     @abstractmethod
     async def generate(self, request: LLMRequest) -> LLMResponse: ...
+
+    async def generate_stream(self, request: LLMRequest):
+        response = await self.generate(request)
+        yield LLMStreamChunk(
+            delta=response.answer,
+            done=True,
+            usage=response.usage,
+            response=response,
+        )
 
 
 class ASRProvider(ABC):

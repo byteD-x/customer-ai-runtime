@@ -43,15 +43,15 @@
 4. 宿主挂载测试：FastAPI 子应用、进程内 facade
 5. 鉴权桥接测试：API Key、Session、JWT、Custom Token
 6. 语音与 RTC 测试
-7. 成本与缓存测试：知识问答首次/重复、业务查询不缓存、成本摘要聚合
+7. 成本与缓存测试：知识问答首次/重复、业务查询不缓存、本地模型价格表估算、成本摘要聚合
 8. 人工接管队列测试：优先级、入队时间、技能组过滤、认领状态
-9. RAG eval 测试：命中、低分未命中、引用关键词失败明细
-10. 面试 demo 冒烟：输出 route、citations、tool_result、handoff_queue、claimed_session、cost_summary、rag_eval_summary
+9. RAG eval 测试：8 个本地 cases、多知识库、命中、低分未命中、引用关键词失败明细
+10. 面试 demo 冒烟：输出 route、citations、tool_result、handoff_package、handoff_queue、claimed_session、cost_summary、rag_eval_summary
 11. 文档一致性核对
 
 ## 4. Future Target
 
 - 多实例人工接管队列：Redis sorted set、数据库事务或行级锁实现原子认领。
-- 真实模型成本：接入 provider usage、模型价格表和租户预算配置。
+- 真实成本结算：在现有本地模型价格表基础上接入 provider 原生 usage、租户预算、币种和账单周期。
 - 线上 RAG 评估：接入业务标注集、人工复核和灰度流量反馈。
 - 外部系统联调：真实 OpenAI/Qdrant/业务 API/客服工单系统配置后再声明通过。

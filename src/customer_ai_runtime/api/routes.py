@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import JSONResponse
 
 from customer_ai_runtime.api.schemas import (
+    AgentToolWorkflowRequest,
     BusinessQueryRequest,
     ChatMessageRequest,
     ContextResolveRequest,
@@ -19,6 +31,7 @@ from customer_ai_runtime.api.schemas import (
     KnowledgeVersionSnapshotRequest,
     MessageFeedbackRequest,
     PolicyUpdateRequest,
+    PromptRollbackRequest,
     PromptUpdateRequest,
     RTCRoomCreateRequest,
     RTCRoomJoinRequest,
@@ -331,6 +344,37 @@ async def add_knowledge_document(
     )
 
 
+@router.post("/api/v1/knowledge-bases/{knowledge_base_id}/documents/upload")
+async def upload_knowledge_document(
+    knowledge_base_id: str,
+    request: Request,
+    tenant_id: Annotated[str, Form(min_length=1, max_length=64)],
+    file: Annotated[UploadFile, File()],
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    container.access_control.validate_tenant_access(auth_context, tenant_id)
+    parsed = container.ingestion_service.parse_document(
+        filename=file.filename or "untitled",
+        content_type=file.content_type or "application/octet-stream",
+        data=await file.read(),
+    )
+    result = await container.knowledge_service.add_document(
+        tenant_id=tenant_id,
+        knowledge_base_id=knowledge_base_id,
+        title=parsed.title,
+        content=parsed.content,
+        metadata=parsed.metadata,
+    )
+    return success_response(
+        {
+            "knowledge_base": result["knowledge_base"].model_dump(mode="json"),
+            "document": result["document"].model_dump(mode="json"),
+            "chunks": [chunk.model_dump(mode="json") for chunk in result["chunks"]],
+        }
+    )
+
+
 @router.get("/api/v1/admin/knowledge-bases/{knowledge_base_id}/versions")
 async def list_admin_knowledge_versions(
     knowledge_base_id: str,
@@ -462,6 +506,35 @@ async def business_query(
         business_context=context,
         tool_name=payload.tool_name,
         parameters=payload.parameters,
+    )
+    return success_response(result.model_dump(mode="json"))
+
+
+@router.post("/api/v1/agents/tool-workflow")
+async def run_agent_tool_workflow(
+    payload: AgentToolWorkflowRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_staff(auth_context)
+    container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
+    session = None
+    if payload.session_id:
+        session = container.session_service.get(payload.tenant_id, payload.session_id)
+    context = await container.business_context_builder.build(
+        tenant_id=payload.tenant_id,
+        channel=payload.channel,
+        session=session,
+        integration_context=payload.integration_context,
+        host_auth_context=auth_context.host_auth_context,
+    )
+    allowed_tools = payload.allowed_tools or [step.tool_name for step in payload.steps]
+    result = await container.agent_workflow_service.run(
+        context=context,
+        steps=[step.model_dump(mode="json") for step in payload.steps],
+        max_steps=payload.max_steps,
+        allowed_tools=allowed_tools,
     )
     return success_response(result.model_dump(mode="json"))
 
@@ -660,6 +733,22 @@ async def update_admin_prompts(
     require_admin(auth_context)
     return success_response(
         get_container(request).admin_service.update_prompts(payload.model_dump(exclude_none=True))
+    )
+
+
+@router.post("/api/v1/admin/prompts/{revision}/rollback")
+async def rollback_admin_prompts(
+    revision: int,
+    payload: PromptRollbackRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    require_admin(auth_context)
+    return success_response(
+        get_container(request).admin_service.rollback_prompts(
+            revision,
+            payload.model_dump(exclude_none=True),
+        )
     )
 
 

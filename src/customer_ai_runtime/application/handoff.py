@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+from typing import Any
+
 from customer_ai_runtime.application.plugins import (
     HumanHandoffPlugin,
     PluginRegistry,
     context_to_plugin_context,
 )
-from customer_ai_runtime.domain.models import Session, SessionState, utcnow
+from customer_ai_runtime.application.runtime import zh
+from customer_ai_runtime.domain.models import (
+    HandoffPackage,
+    MessageRole,
+    Session,
+    SessionState,
+    utcnow,
+)
 from customer_ai_runtime.domain.platform import BusinessContext, PluginKind
 
 
@@ -72,8 +81,96 @@ class HandoffService:
                 continue
             package = await plugin.build_package(session, reason)
             if package is not None:
-                return package
+                return self._enrich_package(package, session, reason, business_context)
         return None
+
+    def _enrich_package(
+        self,
+        package: HandoffPackage,
+        session: Session,
+        reason: str,
+        business_context: BusinessContext,
+    ) -> HandoffPackage:
+        last_user_message = self._last_user_message(session)
+        related_objects = self._merge_dicts(
+            business_context.integration_context.get("business_objects"),
+            business_context.business_objects,
+        )
+        page_context = self._merge_dicts(
+            business_context.integration_context.get("page_context"),
+            business_context.page_context,
+        )
+        behavior_signals = self._merge_dicts(
+            business_context.integration_context.get("behavior_signals"),
+            business_context.behavior_signals,
+        )
+        issue_summary = self._issue_summary(last_user_message, reason, related_objects)
+        sentiment = self._sentiment(reason, behavior_signals)
+        return package.model_copy(
+            update={
+                "last_user_message": package.last_user_message or last_user_message,
+                "related_business_objects": package.related_business_objects or related_objects,
+                "page_context": package.page_context or page_context,
+                "behavior_signals": package.behavior_signals or behavior_signals,
+                "issue_summary": package.issue_summary or issue_summary,
+                "sentiment": package.sentiment if package.sentiment != "neutral" else sentiment,
+                "recommended_reply": self._recommended_reply(sentiment)
+                if sentiment != "neutral"
+                else package.recommended_reply or self._recommended_reply(sentiment),
+            }
+        )
+
+    def _last_user_message(self, session: Session) -> str:
+        for message in reversed(session.messages):
+            if message.role == MessageRole.USER:
+                return message.content
+        return ""
+
+    def _merge_dicts(self, *values: object) -> dict[str, Any]:
+        merged: dict[str, Any] = {}
+        for value in values:
+            if isinstance(value, dict):
+                merged.update(value)
+        return merged
+
+    def _issue_summary(
+        self,
+        last_user_message: str,
+        reason: str,
+        related_objects: dict[str, Any],
+    ) -> str:
+        object_hint = ", ".join(
+            f"{key}={value}" for key, value in sorted(related_objects.items()) if value
+        )
+        source = last_user_message or reason
+        if len(source) > 120:
+            source = f"{source[:117]}..."
+        if object_hint:
+            return f"{source} | related: {object_hint}"
+        return source
+
+    def _sentiment(self, reason: str, behavior_signals: dict[str, Any]) -> str:
+        lowered = reason.lower()
+        if bool(behavior_signals.get("frustrated")) or any(
+            keyword in lowered for keyword in ("risk", "complaint", "refund", "lawyer", "urgent")
+        ):
+            return "negative"
+        repeat_contact = behavior_signals.get("repeat_contact_7d")
+        if isinstance(repeat_contact, int) and repeat_contact >= 2:
+            return "concerned"
+        return "neutral"
+
+    def _recommended_reply(self, sentiment: str) -> str:
+        if sentiment == "negative":
+            return zh(
+                "\\u5148\\u5b89\\u629a\\u7528\\u6237\\u60c5\\u7eea\\uff0c"
+                "\\u786e\\u8ba4\\u95ee\\u9898\\u5bf9\\u8c61\\u548c\\u8bc9\\u6c42\\uff0c"
+                "\\u518d\\u7ed9\\u51fa\\u53ef\\u6267\\u884c\\u5904\\u7406\\u65b9\\u6848\\u3002"
+            )
+        return zh(
+            "\\u5148\\u786e\\u8ba4\\u7528\\u6237\\u8bc9\\u6c42\\uff0c"
+            "\\u518d\\u57fa\\u4e8e\\u5f53\\u524d\\u6458\\u8981\\u7ee7\\u7eed\\u5904\\u7406\\u3002"
+        )
 
     def _resolve_skill_group(self, reason: str, business_context: BusinessContext) -> str:
         explicit = business_context.integration_context.get("skill_group")

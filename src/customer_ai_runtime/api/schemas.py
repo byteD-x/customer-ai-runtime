@@ -8,6 +8,19 @@ from customer_ai_runtime.core.limits import AUDIO_BASE64_MAX_CHARS
 from customer_ai_runtime.domain.models import MessageFeedbackType, ResolutionStatus
 
 ChannelType = Literal["web", "app", "h5", "mini_program", "app_voice", "rtc", "admin"]
+ToolName = Literal[
+    "order_status",
+    "after_sale_status",
+    "logistics_tracking",
+    "account_lookup",
+    "subscription_lookup",
+    "ticket_lookup",
+    "course_lookup",
+    "progress_lookup",
+    "waybill_lookup",
+    "claim_lookup",
+    "crm_profile",
+]
 
 
 class TenantScopedRequest(BaseModel):
@@ -89,21 +102,23 @@ class KnowledgeSearchRequest(TenantScopedRequest):
 
 
 class BusinessQueryRequest(TenantScopedRequest):
-    tool_name: Literal[
-        "order_status",
-        "after_sale_status",
-        "logistics_tracking",
-        "account_lookup",
-        "subscription_lookup",
-        "ticket_lookup",
-        "course_lookup",
-        "progress_lookup",
-        "waybill_lookup",
-        "claim_lookup",
-        "crm_profile",
-    ]
+    tool_name: ToolName
     parameters: dict[str, Any] = Field(default_factory=dict)
     integration_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentToolWorkflowStepRequest(BaseModel):
+    tool_name: ToolName
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentToolWorkflowRequest(TenantScopedRequest):
+    session_id: str | None = Field(default=None, min_length=1, max_length=64)
+    channel: ChannelType = "web"
+    integration_context: dict[str, Any] = Field(default_factory=dict)
+    steps: list[AgentToolWorkflowStepRequest] = Field(min_length=1, max_length=10)
+    max_steps: int = Field(default=3, ge=1, le=10)
+    allowed_tools: list[ToolName] | None = None
 
 
 class VoiceTurnRequest(TenantScopedRequest):
@@ -136,6 +151,11 @@ class PromptUpdateRequest(BaseModel):
     business_answer: str | None = Field(default=None, max_length=4000)
     fallback_answer: str | None = Field(default=None, max_length=4000)
     handoff_summary: str | None = Field(default=None, max_length=4000)
+    change_summary: str | None = Field(default=None, max_length=512)
+
+
+class PromptRollbackRequest(BaseModel):
+    change_summary: str | None = Field(default=None, max_length=512)
 
 
 class PolicyUpdateRequest(BaseModel):

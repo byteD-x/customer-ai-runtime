@@ -14,6 +14,45 @@
       }
     ]
   },
+  "knowledge_bases": [
+    {
+      "tenant_id": "demo-tenant",
+      "knowledge_base_id": "kb_support",
+      "name": "support",
+      "description": "Local interview RAG evaluation support knowledge base",
+      "documents": [
+        {
+          "title": "refund policy",
+          "content": "Refund policy supports seven day no reason refund. Support response SLA is within 24 hours. Keep order id and payment proof.",
+          "metadata": {
+            "source": "interview-eval"
+          }
+        },
+        {
+          "title": "feedback replay",
+          "content": "When a user leaves negative feedback about refund handling, replay the feedback with the session id, refund request, order id, and payment proof before escalating to human support.",
+          "metadata": {
+            "source": "feedback-replay"
+          }
+        }
+      ]
+    },
+    {
+      "tenant_id": "demo-tenant",
+      "knowledge_base_id": "kb_saas",
+      "name": "saas support",
+      "description": "Local interview RAG evaluation SaaS knowledge base",
+      "documents": [
+        {
+          "title": "saas administration policy",
+          "content": "SaaS workspace admin approval is required for tenant seat downgrade. SSO SCIM provisioning changes sync within 15 minutes. Audit log export is retained for 180 days.",
+          "metadata": {
+            "source": "saas-admin"
+          }
+        }
+      ]
+    }
+  ],
   "cases": [
     {
       "case_id": "refund_policy_hit",
@@ -39,13 +78,71 @@
       "expect_effective_hit": true
     },
     {
+      "case_id": "refund_payment_proof_hit",
+      "question": "What should I keep for a refund request?",
+      "knowledge_base_id": "kb_support",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "order id",
+        "payment proof"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
       "case_id": "low_score_miss",
       "question": "Where is the end of universe?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
       "expected_citation_keywords": [],
-      "min_score": 0.18,
+      "min_score": 0.99,
       "expect_effective_hit": false
+    },
+    {
+      "case_id": "business_unrelated_miss",
+      "question": "How do I configure Kubernetes autoscaling?",
+      "knowledge_base_id": "kb_support",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [],
+      "min_score": 0.99,
+      "expect_effective_hit": false
+    },
+    {
+      "case_id": "saas_scim_sync_hit",
+      "question": "How long do SCIM provisioning changes take to sync?",
+      "knowledge_base_id": "kb_saas",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "SCIM provisioning",
+        "15 minutes"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
+      "case_id": "saas_audit_retention_hit",
+      "question": "How long is audit log export retained?",
+      "knowledge_base_id": "kb_saas",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "Audit log export",
+        "180 days"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
+      "case_id": "feedback_replay_refund_hit",
+      "question": "What should be replayed for negative refund feedback?",
+      "knowledge_base_id": "kb_support",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "negative feedback",
+        "session id",
+        "refund request"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
     }
   ]
 }

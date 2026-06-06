@@ -39,7 +39,7 @@ def run_eval(
     with _storage_env(storage_root) as resolved_storage_root:
         get_settings.cache_clear()
         with TestClient(create_app()) as client:
-            _seed_knowledge_base(client, payload["knowledge_base"])
+            _seed_knowledge_bases(client, payload)
             results = _run_cases(client, payload["cases"])
         get_settings.cache_clear()
     report = evaluate_rag_results(payload["cases"], results)
@@ -64,6 +64,16 @@ def main() -> int:
             print("rag_eval_failures")
             print(json.dumps(report["failures"], ensure_ascii=False, indent=2))
     return 0 if report["summary"]["failed"] == 0 else 1
+
+
+def _seed_knowledge_bases(client: TestClient, payload: dict[str, Any]) -> None:
+    knowledge_bases = payload.get("knowledge_bases")
+    if isinstance(knowledge_bases, list):
+        for knowledge_base in knowledge_bases:
+            if isinstance(knowledge_base, dict):
+                _seed_knowledge_base(client, knowledge_base)
+        return
+    _seed_knowledge_base(client, payload["knowledge_base"])
 
 
 def _seed_knowledge_base(client: TestClient, knowledge_base: dict[str, Any]) -> None:

@@ -12,25 +12,29 @@
 - 实时业务工具、行业适配、插件注册与启停
 - Auth Bridge：API Key / Session / JWT / Custom Token / 自定义桥接
 - 路由置信度分层、`intent_stack`、页面上下文感知
-- 成本治理：LLM usage、知识问答安全缓存、业务查询不缓存、成本摘要
-- RAG eval：本地 case、失败明细、可复现脚本
+- 成本治理：LLM usage、可配置模型价格表、知识问答安全缓存、业务查询不缓存、成本摘要
+- LLM 接入治理：模型覆盖、结构化 schema、Prompt 版本历史与 prompt hash 缓存隔离
+- Prompt 回滚 API：指定 revision 回滚并生成新的激活版本记录
+- RAG eval：8 个本地 case、多知识库样例、失败明细、可复现脚本
+- RAG 文件上传解析：文本 / Markdown 已可走上传入口，PDF / Word 依赖 `providers` extra
+- AgentWorkflow HTTP API：顺序工具步骤、工具白名单、步骤上限、失败停止与 trace
+- 结构化交接包：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号
 - 单实例人工接管队列：技能组、优先级、`claim-next`
+- 本地质量门禁修复：`scripts/test.ps1` 串联静态检查、类型检查与测试
 - 面试演示与 STAR / 简历材料
 
 ## 2. 优先待办
 
 ### P0：面试可讲深度
 
-- **工具编排链路**：支持“订单状态 -> 物流轨迹 -> 售后建议”这类多工具顺序调用，并保留失败降级。
-- **交接包增强**：在 handoff package 中补充情绪、问题摘要、建议回复和相关业务对象。
-- **RAG eval 扩样**：增加更贴近行业场景的 eval cases，覆盖错误路由、引用缺失、低分召回和多知识库。
+- 当前本地可完成的 P0 面试增强项已完成；后续 P0 只接收能绑定代码、测试和面试讲述的新问题。
 
 ### P1：生产化增强
 
 - **多实例人工队列**：将当前 Session 轻量队列迁移为 Redis sorted set 或数据库事务认领。
-- **真实成本配置**：接入 provider usage、模型价格表、租户预算阈值和告警策略。
+- **真实成本结算**：在当前本地模型价格表基础上，继续接入真实 provider usage、租户预算阈值、币种和账单结算。
 - **外部系统联调**：补充 OpenAI / Qdrant / 真实业务 API / 客服工单系统的可选联调材料。
-- **部署材料完善**：细化环境变量模板、Docker Compose、启动检查和常见故障排查。
+- **部署材料完善**：在现有 Docker Compose 基础上，继续细化环境变量模板、启动检查、Qdrant 联调和常见故障排查。
 
 ### P2：长期能力
 
@@ -50,7 +54,7 @@
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
-.venv\Scripts\python.exe scripts\eval_rag.py
+.venv\Scripts\python.exe scripts\eval_rag.py --json
 .venv\Scripts\python.exe examples\interview_demo.py
 ```
 

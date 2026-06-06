@@ -31,7 +31,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
     with _storage_env(storage_root) as resolved_storage_root:
         get_settings.cache_clear()
         with TestClient(create_app()) as client:
-            _seed_knowledge_base(client, eval_payload["knowledge_base"])
+            _seed_knowledge_bases(client, eval_payload)
             knowledge_first = _chat(
                 client,
                 "What is refund policy?",
@@ -47,7 +47,15 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
                 "订单 ORD-1001 发货了吗？",
                 integration_context={"industry": "ecommerce"},
             )
-            risk = _chat(client, "我要投诉监管处理")
+            risk = _chat(
+                client,
+                "我要投诉监管处理",
+                integration_context={
+                    "industry": "ecommerce",
+                    "business_objects": {"order_id": "ORD-1001"},
+                    "behavior_signals": {"frustrated": True, "repeat_contact_7d": 2},
+                },
+            )
             handoff_queue = _get_handoff_queue(client)
             claimed_session = _claim_next_handoff(client)
             cost_summary = _get_cost_summary(client)
@@ -65,6 +73,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
         },
         "citations": knowledge_first["citations"],
         "tool_result": business["tool_result"],
+        "handoff_package": risk["handoff"],
         "handoff_queue": handoff_queue,
         "claimed_session": claimed_session,
         "cost_summary": cost_summary,
@@ -87,6 +96,7 @@ def main() -> int:
             "route",
             "citations",
             "tool_result",
+            "handoff_package",
             "handoff_queue",
             "claimed_session",
             "cost_summary",
@@ -99,6 +109,16 @@ def main() -> int:
 
 def _load_eval_payload() -> dict[str, Any]:
     return json.loads(EVAL_CASES_PATH.read_text(encoding="utf-8"))
+
+
+def _seed_knowledge_bases(client: TestClient, payload: dict[str, Any]) -> None:
+    knowledge_bases = payload.get("knowledge_bases")
+    if isinstance(knowledge_bases, list):
+        for knowledge_base in knowledge_bases:
+            if isinstance(knowledge_base, dict):
+                _seed_knowledge_base(client, knowledge_base)
+        return
+    _seed_knowledge_base(client, payload["knowledge_base"])
 
 
 def _seed_knowledge_base(client: TestClient, knowledge_base: dict[str, Any]) -> None:

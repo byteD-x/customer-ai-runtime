@@ -287,10 +287,27 @@ class AdminService:
         return self.get_runtime_config()
 
     def get_prompts(self) -> dict[str, Any]:
-        return self.runtime_config.get_prompts().model_dump(mode="json")
+        snapshot = self.runtime_config.snapshot()
+        prompt_versions = snapshot["prompt_versions"]
+        active_revision = next(
+            (item["revision"] for item in prompt_versions if item.get("active") is True),
+            None,
+        )
+        return {
+            "prompts": snapshot["prompts"],
+            "prompt_versions": prompt_versions,
+            "active_revision": active_revision,
+        }
 
     def update_prompts(self, data: dict[str, Any]) -> dict[str, Any]:
         return self.runtime_config.update_prompts(data).model_dump(mode="json")
+
+    def rollback_prompts(self, revision: int, data: dict[str, Any]) -> dict[str, Any]:
+        self.runtime_config.rollback_prompts(
+            revision,
+            change_summary=data.get("change_summary"),
+        )
+        return self.get_runtime_config()
 
     def get_policies(self) -> dict[str, Any]:
         return self.runtime_config.get_policies().model_dump(mode="json")

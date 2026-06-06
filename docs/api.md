@@ -172,8 +172,20 @@
 - `route_decision`
 - `cache_hit`：是否命中知识问答安全缓存；业务查询不缓存
 - `usage`：LLM token 用量，默认本地 provider 返回估算值
-- `estimated_cost_cents`：按 token 粗略估算的本轮成本，单位为美分
+- `estimated_cost_cents`：按本地模型价格表估算的本轮成本，单位为美分
 - `budget_status`：`ok` / `alert`
+
+`handoff` 为结构化交接包，当前重点字段包括：
+
+- `reason`
+- `summary`
+- `issue_summary`
+- `sentiment`
+- `last_user_message`
+- `related_business_objects`
+- `page_context`
+- `behavior_signals`
+- `recommended_reply`
 
 其中 `route_decision` 包含：
 
@@ -201,6 +213,16 @@
 
 ### `POST /api/v1/knowledge-bases/{knowledge_base_id}/documents`
 
+### `POST /api/v1/knowledge-bases/{knowledge_base_id}/documents/upload`
+
+- 用途：上传文档文件并写入知识库，复用现有切片、版本和向量写入链路
+- 请求类型：`multipart/form-data`
+- 表单字段：
+  - `tenant_id`
+  - `file`
+- 当前支持：UTF-8 文本、Markdown；PDF / Word 解析依赖可选 provider extra 中的 `pypdf` / `python-docx`
+- 返回重点：`knowledge_base`、`document`、`chunks`
+
 ### `POST /api/v1/knowledge-bases/{knowledge_base_id}/search`
 
 ## 7. 业务工具接口
@@ -223,6 +245,21 @@
   }
 }
 ```
+
+### `POST /api/v1/agents/tool-workflow`
+
+- 用途：按受控步骤执行多工具工作流，例如“订单状态 -> 物流轨迹 -> 售后建议”
+- 权限：`admin` / `operator`，面向运营排查、内部演示和受控自动化，不作为开放式自主 Agent
+- 请求字段：
+  - `tenant_id`
+  - `session_id`（可选）
+  - `channel`（默认 `web`）
+  - `integration_context`（可选）
+  - `steps`：有序工具步骤，每步包含 `tool_name`、`parameters`
+  - `max_steps`：最大步骤数，防止无限循环
+  - `allowed_tools`：允许调用的工具白名单
+- 返回重点：
+  - `trace`：每步包含 `step_index`、`tool_name`、`status`、`summary`、`error`、`duration_ms`
 
 ## 8. 语音接口
 
@@ -369,6 +406,12 @@
 
 ### `GET /api/v1/admin/prompts`
 
+- 用途：查看当前 Prompt 配置与版本历史
+- 返回重点：
+  - `prompts`
+  - `prompt_versions`
+  - `active_revision`
+
 ### `GET /api/v1/admin/runtime-config`
 
 - 用途：查看运行时热配置快照
@@ -388,6 +431,24 @@
   - `plugin_states`
 
 ### `PUT /api/v1/admin/prompts`
+
+- 用途：更新 Prompt 配置并记录新版本
+- 支持字段：`knowledge_answer`、`business_answer`、`fallback_answer`、`change_summary`
+
+### `POST /api/v1/admin/prompts/{revision}/rollback`
+
+- 用途：将 Prompt 配置回滚到指定历史 revision，并生成一条新的激活版本记录
+- 权限：`admin`
+- 路径参数：
+  - `revision`：目标历史版本号
+- 请求字段：
+  - `change_summary`（可选，默认记录为 rollback）
+- 返回重点：
+  - `prompts`
+  - `prompt_versions`
+  - `policies`
+  - `alerts`
+  - `plugin_states`
 
 ### `GET /api/v1/admin/policies`
 

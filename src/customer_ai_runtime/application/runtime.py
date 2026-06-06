@@ -8,6 +8,7 @@ from time import time
 from typing import Any
 
 from customer_ai_runtime.core.diagnostics_export import DiagnosticsJsonlExporter
+from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.core.redaction import sanitize_context
 from customer_ai_runtime.core.request_context import get_request_id
 from customer_ai_runtime.domain.models import (
@@ -16,6 +17,7 @@ from customer_ai_runtime.domain.models import (
     DiagnosticLevel,
     PolicyConfig,
     PromptConfig,
+    PromptTemplateRecord,
 )
 from customer_ai_runtime.repositories.base import DiagnosticsRepository
 
@@ -49,15 +51,45 @@ class RuntimeConfigService:
         )
         self._policies = PolicyConfig()
         self._alerts = AlertRuleConfig()
+        self._prompt_history: list[PromptTemplateRecord] = []
         self._plugin_states: dict[str, bool] = {}
         self._response_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._load()
+        if not self._prompt_history:
+            self._append_prompt_version("initial prompts", flush=False)
 
     def get_prompts(self) -> PromptConfig:
         return self._prompts.model_copy(deep=True)
 
     def update_prompts(self, data: dict[str, Any]) -> PromptConfig:
-        self._prompts = self._prompts.model_copy(update=data)
+        prompt_fields = {
+            key: value for key, value in data.items() if key in PromptConfig.model_fields
+        }
+        self._prompts = self._prompts.model_copy(update=prompt_fields)
+        self._append_prompt_version(str(data.get("change_summary") or "prompt update"))
+        self._flush()
+        return self.get_prompts()
+
+    def list_prompt_versions(self) -> list[PromptTemplateRecord]:
+        return [record.model_copy(deep=True) for record in self._prompt_history]
+
+    def rollback_prompts(
+        self,
+        revision: int,
+        change_summary: str | None = None,
+    ) -> PromptConfig:
+        target = next(
+            (record for record in self._prompt_history if record.revision == revision),
+            None,
+        )
+        if target is None:
+            raise AppError(
+                code="not_found",
+                message=f"Prompt revision {revision} 不存在。",
+                status_code=404,
+            )
+        self._prompts = target.prompts.model_copy(deep=True)
+        self._append_prompt_version(change_summary or f"rollback to revision {revision}")
         self._flush()
         return self.get_prompts()
 
@@ -112,6 +144,9 @@ class RuntimeConfigService:
     def snapshot(self) -> dict[str, Any]:
         return {
             "prompts": self.get_prompts().model_dump(mode="json"),
+            "prompt_versions": [
+                record.model_dump(mode="json") for record in self.list_prompt_versions()
+            ],
             "policies": self.get_policies().model_dump(mode="json"),
             "alerts": self.get_alert_rules().model_dump(mode="json"),
             "plugin_states": self.get_plugin_states(),
@@ -123,6 +158,14 @@ class RuntimeConfigService:
         payload = json.loads(self._storage_path.read_text(encoding="utf-8"))
         if "prompts" in payload:
             self._prompts = PromptConfig.model_validate(payload["prompts"])
+        if "prompt_versions" in payload and isinstance(payload["prompt_versions"], list):
+            self._prompt_history = [
+                PromptTemplateRecord.model_validate(item)
+                for item in payload["prompt_versions"]
+                if isinstance(item, dict)
+            ]
+        if not self._prompt_history:
+            self._append_prompt_version("initial prompts", flush=False)
         if "policies" in payload:
             self._policies = PolicyConfig.model_validate(payload["policies"])
         if "alerts" in payload:
@@ -137,6 +180,7 @@ class RuntimeConfigService:
             return
         payload = {
             "prompts": self._prompts.model_dump(mode="json"),
+            "prompt_versions": [record.model_dump(mode="json") for record in self._prompt_history],
             "policies": self._policies.model_dump(mode="json"),
             "alerts": self._alerts.model_dump(mode="json"),
             "plugin_states": self._plugin_states,
@@ -149,6 +193,24 @@ class RuntimeConfigService:
             encoding="utf-8",
         )
         os.replace(tmp_path, self._storage_path)
+
+    def _append_prompt_version(self, change_summary: str, *, flush: bool = True) -> None:
+        for record in self._prompt_history:
+            record.active = False
+        revision = (
+            1
+            if not self._prompt_history
+            else max(record.revision for record in self._prompt_history) + 1
+        )
+        self._prompt_history.append(
+            PromptTemplateRecord(
+                prompts=self._prompts.model_copy(deep=True),
+                revision=revision,
+                change_summary=change_summary,
+            )
+        )
+        if flush:
+            self._flush()
 
 
 class MetricsService:

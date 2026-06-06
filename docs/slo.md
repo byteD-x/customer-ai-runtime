@@ -19,7 +19,7 @@
   - 统计窗口（最近 N 条 / 最近 5 分钟）
   - 稳态还是冷启动
   - 是否包含外部 provider 耗时
-- `estimated_cost_cents`：区分估算 usage 与 provider 原生 usage；真实账单需要模型价格表、币种和结算周期
+- `estimated_cost_cents`：当前按本地模型价格表与 LLM usage 估算；若 provider 只返回 `total_tokens`，按输入侧估算成本。真实账单需要 provider 原生 usage、租户、币种和结算周期
 - `cache_hit_rate`：仅统计安全知识问答缓存，不把实时业务查询纳入可缓存口径
 - `handoff_wait_ms`：从 `handoff_enqueued_at` 到认领成功的等待时长，按 `skill_group` 聚合 p50/p95
 - `rag_eval_pass_rate`：仅用于离线 case 回归；线上口径必须基于标注集、灰度流量和人工复核
@@ -27,6 +27,6 @@
 ## 3. Future Target
 
 - 将当前内存/JSON 样本统计迁移为可持久化、可窗口聚合的指标后端。
-- 为真实 provider usage 接入价格表，区分模型、租户、route 和缓存节省。
+- 在现有本地模型价格表基础上接入 provider 原生 usage、租户预算、币种和账单结算，区分模型、route 和缓存节省。
 - 将单实例 handoff queue 指标迁移到多实例队列或数据库事务口径。
 - 将 RAG eval 从本地小样本扩展为业务标注集和线上反馈闭环。

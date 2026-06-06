@@ -319,17 +319,18 @@
 
 - LLM provider 返回或本地估算的 `LLMUsage`
 - route、provider、channel、session、cache_hit
+- 本地模型价格表配置
 - `PolicyConfig.cost_alert_estimated_cents`
 
 ### 输出
 
 - Chat 响应字段：`usage`、`cache_hit`、`estimated_cost_cents`、`budget_status`
-- 诊断事件：`chat.cost_recorded`
+- 诊断事件：`chat.cost_recorded`，包含 provider、model、route、usage 和估算成本
 - 管理端聚合：`GET /api/v1/admin/costs/summary`
 
 ### 设计取舍
 
-- 本地 provider 默认估算 token，用于演示治理链路；真实 provider 可优先使用 SDK usage。
+- 本地 provider 默认估算 token，并按本地模型价格表估算成本，用于演示治理链路；真实 provider 可优先使用 SDK usage。
 - 知识问答缓存命中时 usage 归零，便于观察缓存节省的请求。
 - 业务工具查询不缓存，避免实时订单、物流、售后状态过期。
 
@@ -369,3 +370,4 @@
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
 - 当前人工接管队列是基于 `Session` 的单实例轻量队列；Redis sorted set / 数据库事务认领属于 future target。
 - 当前 RAG eval 是本地 case 评测，不代表线上准确率。
+- 当前成本治理是本地模型价格表估算，不代表真实 provider 账单或线上节省比例。

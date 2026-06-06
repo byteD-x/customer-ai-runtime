@@ -6,6 +6,7 @@ from typing import Any
 
 from customer_ai_runtime.application.access import AccessControlService
 from customer_ai_runtime.application.admin import AdminService
+from customer_ai_runtime.application.agent_workflow import AgentWorkflowService
 from customer_ai_runtime.application.auth import AuthService, build_builtin_auth_plugins
 from customer_ai_runtime.application.business import (
     BusinessContextBuilder,
@@ -16,6 +17,7 @@ from customer_ai_runtime.application.business import (
 )
 from customer_ai_runtime.application.chat import ChatService
 from customer_ai_runtime.application.handoff import HandoffService
+from customer_ai_runtime.application.ingestion import DocumentIngestionService
 from customer_ai_runtime.application.knowledge import KnowledgeService
 from customer_ai_runtime.application.plugins import PluginRegistry, build_builtin_plugins
 from customer_ai_runtime.application.routing import RoutingService
@@ -78,6 +80,8 @@ class Container:
     plugin_registry: PluginRegistry
     auth_service: AuthService
     access_control: AccessControlService
+    ingestion_service: DocumentIngestionService
+    agent_workflow_service: AgentWorkflowService
     session_service: SessionService
     knowledge_service: KnowledgeService
     business_context_builder: BusinessContextBuilder
@@ -135,6 +139,7 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
         on_state_change=_persist_plugin_state,
     )
     access_control = AccessControlService()
+    ingestion_service = DocumentIngestionService()
 
     llm_provider = overrides.llm_provider or _build_llm_provider(settings)
     asr_provider = overrides.asr_provider or _build_asr_provider(settings)
@@ -156,6 +161,13 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
     business_data_provider = RealTimeBusinessDataProvider(plugin_registry, business_adapter)
     routing_service = RoutingService(plugin_registry, runtime_config)
     tool_service = ToolService(business_data_provider, tool_catalog)
+    agent_workflow_service = AgentWorkflowService(
+        lambda *, context, tool_name, parameters: tool_service.execute(
+            business_context=context,
+            tool_name=tool_name,
+            parameters=parameters,
+        )
+    )
     handoff_service = HandoffService(plugin_registry)
     response_enhancement_orchestrator = ResponseEnhancementOrchestrator(plugin_registry)
     chat_service = ChatService(
@@ -171,6 +183,14 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
         response_enhancer=response_enhancement_orchestrator,
         metrics=metrics,
         diagnostics=diagnostics,
+        model_price_map=settings.get_model_price_map(),
+        default_input_cost_per_1k_cents=settings.model_input_cost_per_1k_cents,
+        default_output_cost_per_1k_cents=settings.model_output_cost_per_1k_cents,
+        llm_model_name=(
+            settings.openai_chat_model
+            if settings.llm_provider == "openai"
+            else settings.llm_provider
+        ),
     )
     voice_service = VoiceService(asr_provider, tts_provider, chat_service, metrics, diagnostics)
     rtc_service = RTCService(rtc_repository, session_service, voice_service, metrics, diagnostics)
@@ -191,6 +211,8 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
         plugin_registry=plugin_registry,
         auth_service=auth_service,
         access_control=access_control,
+        ingestion_service=ingestion_service,
+        agent_workflow_service=agent_workflow_service,
         session_service=session_service,
         knowledge_service=knowledge_service,
         business_context_builder=business_context_builder,

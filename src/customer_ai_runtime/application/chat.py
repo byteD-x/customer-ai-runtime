@@ -48,6 +48,10 @@ class ChatService:
         response_enhancer: ResponseEnhancementOrchestrator,
         metrics: MetricsService,
         diagnostics: DiagnosticsService,
+        model_price_map: dict[str, dict[str, float]] | None = None,
+        default_input_cost_per_1k_cents: float = 0.1,
+        default_output_cost_per_1k_cents: float = 0.1,
+        llm_model_name: str | None = None,
     ) -> None:
         self.session_service = session_service
         self.knowledge_service = knowledge_service
@@ -61,6 +65,10 @@ class ChatService:
         self.response_enhancer = response_enhancer
         self.metrics = metrics
         self.diagnostics = diagnostics
+        self.model_price_map = model_price_map or {}
+        self.default_input_cost_per_1k_cents = default_input_cost_per_1k_cents
+        self.default_output_cost_per_1k_cents = default_output_cost_per_1k_cents
+        self.llm_model_name = llm_model_name
 
     async def process_message(
         self,
@@ -323,7 +331,12 @@ class ChatService:
 
         usage_payload = response_payload.get("usage")
         usage = LLMUsage.model_validate(usage_payload or {})
-        estimated_cost_cents = self._estimated_cost_cents(usage)
+        provider = self.runtime_config_provider_name()
+        estimated_cost_cents = self._estimated_cost_cents(
+            usage,
+            provider=provider,
+            model=self.llm_model_name,
+        )
         budget_status = (
             "alert" if estimated_cost_cents >= policies.cost_alert_estimated_cents else "ok"
         )
@@ -334,6 +347,7 @@ class ChatService:
             session_id=session.session_id,
             route=route_decision.route,
             channel=channel,
+            provider=provider,
             usage=usage,
             cache_hit=cache_hit,
             estimated_cost_cents=estimated_cost_cents,
@@ -428,10 +442,38 @@ class ChatService:
             estimated=True,
         )
 
-    def _estimated_cost_cents(self, usage: LLMUsage) -> float:
-        if usage.total_tokens <= 0:
+    def _estimated_cost_cents(
+        self,
+        usage: LLMUsage,
+        *,
+        provider: str,
+        model: str | None,
+    ) -> float:
+        if usage.input_tokens <= 0 and usage.output_tokens <= 0 and usage.total_tokens <= 0:
             return 0.0
-        return round(usage.total_tokens * 0.0001, 6)
+        price = self._resolve_model_price(provider, model)
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
+        if input_tokens <= 0 and output_tokens <= 0:
+            input_tokens = usage.total_tokens
+        input_cost = input_tokens * price["input_per_1k_cents"] / 1000
+        output_cost = output_tokens * price["output_per_1k_cents"] / 1000
+        return round(input_cost + output_cost, 6)
+
+    def _resolve_model_price(self, provider: str, model: str | None) -> dict[str, float]:
+        candidates = []
+        if model:
+            candidates.append(f"{provider}:{model}")
+            candidates.append(model)
+        candidates.extend([provider, "default"])
+        for candidate in candidates:
+            price = self.model_price_map.get(candidate)
+            if price:
+                return price
+        return {
+            "input_per_1k_cents": self.default_input_cost_per_1k_cents,
+            "output_per_1k_cents": self.default_output_cost_per_1k_cents,
+        }
 
     def _record_cost(
         self,
@@ -440,6 +482,7 @@ class ChatService:
         session_id: str,
         route: RouteType,
         channel: str,
+        provider: str,
         usage: LLMUsage,
         cache_hit: bool,
         estimated_cost_cents: float,
@@ -452,7 +495,8 @@ class ChatService:
             {
                 "tenant_id": tenant_id,
                 "session_id": session_id,
-                "provider": self.runtime_config_provider_name(),
+                "provider": provider,
+                "model": self.llm_model_name,
                 "route": route.value,
                 "channel": channel,
                 "cache_hit": cache_hit,

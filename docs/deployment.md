@@ -25,6 +25,8 @@
 - `qdrant`
   用途：向量检索依赖，默认暴露 `6333/6334`
 
+说明：Compose 已提供 Qdrant 服务和默认 `CUSTOMER_AI_QDRANT_URL=http://qdrant:6333`；应用默认仍使用 `local` Vector provider，若要实际联调 Qdrant，需要显式配置 `CUSTOMER_AI_VECTOR_PROVIDER=qdrant` 及必要凭据。
+
 关键配置点：
 
 - `customer-ai-runtime` 默认通过 `build.args.CUSTOMER_AI_PIP_EXTRAS=providers` 安装可选提供商依赖
@@ -191,9 +193,12 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 本地演示与评测验证：
 
 ```powershell
-.venv\Scripts\python.exe scripts\eval_rag.py
+powershell -ExecutionPolicy Bypass -File scripts\test.ps1
+.venv\Scripts\python.exe scripts\eval_rag.py --json
 .venv\Scripts\python.exe examples\interview_demo.py
 ```
+
+当前本地实测基线为：`scripts/test.ps1` 通过、RAG eval 8 cases passed、`examples/interview_demo.py` 跑通；`pytest` 数量以实际门禁输出为准。
 
 上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省或生产压测结果。
 
@@ -205,7 +210,7 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 - Docker Compose 适合单机或小规模环境，不等同于高可用生产集群方案
 - 当前存储层仍以本地 JSON 仓储为主，更适合开发、演示和轻量部署
 - 当前人工接管队列基于本地 `Session` 状态排序，未提供多实例原子认领
-- 当前成本统计为本地估算与 provider usage 的治理入口，未内置真实模型价格表和租户账单结算
+- 当前成本统计支持本地模型价格表估算和 provider usage 治理入口，未接入真实租户账单结算
 - 当前 RAG eval 为离线小样本脚本，未接入真实标注集、灰度流量和人工复核
 
 ## 7.1 安全与保护性配置（当前实现）
@@ -222,7 +227,7 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 
 - 多实例无状态部署与共享持久化后端
 - 多实例人工队列与原子认领
-- 基于真实模型价格表和 provider usage 的租户成本核算
+- 基于 provider 原生 usage、租户预算、币种和账单周期的真实成本结算
 - 基于业务标注集和线上灰度流量的 RAG 质量评估
 - Prometheus / Grafana 原生指标暴露
 - 专用告警推送通道（Webhook、短信、IM）

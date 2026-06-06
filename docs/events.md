@@ -46,6 +46,7 @@
 - `tenant_id`
 - `session_id`
 - `provider`
+- `model`
 - `route`
 - `channel`
 - `cache_hit`
@@ -56,7 +57,7 @@
 - `estimated_cost_cents`
 - `budget_status`
 
-这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
+这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`estimated_cost_cents` 当前按本地模型价格表与 usage 估算；真实租户账单仍需要 provider 原生 usage、币种与结算周期。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
 
 ## 4. 注意事项
 

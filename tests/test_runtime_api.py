@@ -114,6 +114,50 @@ def test_chat_knowledge_flow(client: TestClient) -> None:
     assert data["citations"]
 
 
+def test_upload_knowledge_document_from_markdown_file(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/knowledge-bases",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "knowledge_base_id": "kb_upload",
+            "name": "upload kb",
+            "description": "uploaded documents",
+        },
+    )
+    assert response.status_code == 200
+
+    upload = client.post(
+        "/api/v1/knowledge-bases/kb_upload/documents/upload",
+        headers=CUSTOMER_HEADERS,
+        data={"tenant_id": "demo-tenant"},
+        files={
+            "file": (
+                "support-policy.md",
+                b"# Support policy\n\nRefund requests are handled within 24 hours.",
+                "text/markdown",
+            )
+        },
+    )
+    assert upload.status_code == 200
+    upload_data = upload.json()["data"]
+    assert upload_data["document"]["title"] == "support-policy"
+    assert upload_data["document"]["metadata"]["source_filename"] == "support-policy.md"
+    assert upload_data["chunks"]
+
+    search = client.post(
+        "/api/v1/knowledge-bases/kb_upload/search",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "query": "refund handled within 24 hours",
+            "min_score": 0.0,
+        },
+    )
+    assert search.status_code == 200
+    assert search.json()["data"]
+
+
 def test_chat_business_flow(client: TestClient) -> None:
     response = client.post(
         "/api/v1/chat/messages",
@@ -162,12 +206,26 @@ def test_handoff_flow(client: TestClient) -> None:
             "tenant_id": "demo-tenant",
             "channel": "web",
             "message": "\u6211\u8981\u8f6c\u4eba\u5de5\u5ba2\u670d",
+            "integration_context": {
+                "industry": "ecommerce",
+                "page_context": {"page_type": "order_detail"},
+                "business_objects": {"order_id": "ORD-1001"},
+                "behavior_signals": {"frustrated": True, "repeat_contact_7d": 2},
+            },
         },
     )
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["handoff"] is not None
     assert data["state"] == "waiting_human"
+    handoff = data["handoff"]
+    assert handoff["sentiment"] == "negative"
+    assert handoff["last_user_message"] == "\u6211\u8981\u8f6c\u4eba\u5de5\u5ba2\u670d"
+    assert handoff["related_business_objects"]["order_id"] == "ORD-1001"
+    assert handoff["page_context"]["page_type"] == "order_detail"
+    assert handoff["behavior_signals"]["frustrated"] is True
+    assert "ORD-1001" in handoff["issue_summary"]
+    assert handoff["recommended_reply"]
 
     claim = client.post(
         f"/api/v1/sessions/{data['session_id']}/claim-human",
@@ -527,7 +585,10 @@ def test_admin_runtime_config_hot_update(client: TestClient) -> None:
         "/api/v1/admin/runtime-config",
         headers=ADMIN_HEADERS,
         json={
-            "prompts": {"fallback_answer": "请先提供订单号。"},
+            "prompts": {
+                "fallback_answer": "请先提供订单号。",
+                "change_summary": "tighten fallback prompt",
+            },
             "policies": {"knowledge_top_k": 6},
             "alerts": {
                 "diagnostic_error_threshold": 2,
@@ -539,6 +600,10 @@ def test_admin_runtime_config_hot_update(client: TestClient) -> None:
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["prompts"]["fallback_answer"] == "请先提供订单号。"
+    assert len(data["prompt_versions"]) == 2
+    assert data["prompt_versions"][-1]["active"] is True
+    assert data["prompt_versions"][-1]["revision"] == 2
+    assert data["prompt_versions"][-1]["change_summary"] == "tighten fallback prompt"
     assert data["policies"]["knowledge_top_k"] == 6
     assert data["alerts"]["diagnostic_error_threshold"] == 2
     assert data["alerts"]["waiting_human_session_threshold"] == 2
@@ -547,6 +612,7 @@ def test_admin_runtime_config_hot_update(client: TestClient) -> None:
     runtime_config = client.get("/api/v1/admin/runtime-config", headers=ADMIN_HEADERS)
     assert runtime_config.status_code == 200
     assert runtime_config.json()["data"]["policies"]["knowledge_top_k"] == 6
+    assert runtime_config.json()["data"]["prompt_versions"][-1]["revision"] == 2
     assert runtime_config.json()["data"]["alerts"]["diagnostic_error_threshold"] == 2
 
     chat_after_disable = client.post(
@@ -561,6 +627,146 @@ def test_admin_runtime_config_hot_update(client: TestClient) -> None:
     )
     assert chat_after_disable.status_code == 200
     assert chat_after_disable.json()["data"]["route"] == "fallback"
+
+
+def test_admin_prompt_rollback_creates_audited_revision(client: TestClient) -> None:
+    initial_config = client.get("/api/v1/admin/runtime-config", headers=ADMIN_HEADERS)
+    assert initial_config.status_code == 200
+    initial_fallback = initial_config.json()["data"]["prompts"]["fallback_answer"]
+
+    prompt_view = client.get("/api/v1/admin/prompts", headers=ADMIN_HEADERS)
+    assert prompt_view.status_code == 200
+    assert prompt_view.json()["data"]["active_revision"] == 1
+    assert len(prompt_view.json()["data"]["prompt_versions"]) == 1
+
+    update = client.put(
+        "/api/v1/admin/prompts",
+        headers=ADMIN_HEADERS,
+        json={
+            "fallback_answer": "临时调试提示词。",
+            "change_summary": "temporary prompt change",
+        },
+    )
+    assert update.status_code == 200
+
+    rollback = client.post(
+        "/api/v1/admin/prompts/1/rollback",
+        headers=ADMIN_HEADERS,
+        json={"change_summary": "rollback temporary prompt"},
+    )
+    assert rollback.status_code == 200
+    data = rollback.json()["data"]
+    assert data["prompts"]["fallback_answer"] == initial_fallback
+    assert len(data["prompt_versions"]) == 3
+    assert data["prompt_versions"][-1]["revision"] == 3
+    assert data["prompt_versions"][-1]["active"] is True
+    assert data["prompt_versions"][-1]["change_summary"] == "rollback temporary prompt"
+    assert data["prompt_versions"][0]["active"] is False
+    assert data["prompt_versions"][1]["active"] is False
+
+
+def test_admin_prompt_rollback_unknown_revision_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/admin/prompts/99/rollback",
+        headers=ADMIN_HEADERS,
+        json={"change_summary": "missing revision"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_agent_tool_workflow_returns_trace(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/agents/tool-workflow",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "integration_context": {"industry": "ecommerce"},
+            "allowed_tools": ["order_status"],
+            "steps": [
+                {
+                    "tool_name": "order_status",
+                    "parameters": {"order_id": "ORD-1001"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    trace = response.json()["data"]["trace"]
+    assert len(trace) == 1
+    assert trace[0]["tool_name"] == "order_status"
+    assert trace[0]["status"] == "success"
+    assert trace[0]["duration_ms"] >= 0
+    assert "ORD-1001" in trace[0]["summary"]
+
+
+def test_agent_tool_workflow_rejects_disallowed_tool(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/agents/tool-workflow",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "integration_context": {"industry": "ecommerce"},
+            "allowed_tools": ["ticket_lookup"],
+            "steps": [
+                {
+                    "tool_name": "order_status",
+                    "parameters": {"order_id": "ORD-1001"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_agent_tool_workflow_rejects_too_many_steps(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/agents/tool-workflow",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "integration_context": {"industry": "ecommerce"},
+            "max_steps": 1,
+            "steps": [
+                {
+                    "tool_name": "order_status",
+                    "parameters": {"order_id": "ORD-1001"},
+                },
+                {
+                    "tool_name": "order_status",
+                    "parameters": {"order_id": "ORD-1001"},
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_agent_tool_workflow_requires_staff_role(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/agents/tool-workflow",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "integration_context": {"industry": "ecommerce"},
+            "steps": [
+                {
+                    "tool_name": "order_status",
+                    "parameters": {"order_id": "ORD-1001"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
 
 
 def test_admin_room_and_knowledge_listing(client: TestClient) -> None:
@@ -702,6 +908,45 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert "local" in cost_data["by_provider"]
     assert "knowledge" in cost_data["by_route"]
     assert "business" in cost_data["by_route"]
+
+
+def test_chat_cost_uses_configured_model_price_map(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv(
+        "CUSTOMER_AI_MODEL_PRICE_MAP_JSON",
+        json.dumps({"local": {"input_per_1k_cents": 1.0, "output_per_1k_cents": 2.0}}),
+    )
+    get_settings.cache_clear()
+    with TestClient(create_app()) as custom_client:
+        response = custom_client.post(
+            "/api/v1/chat/messages",
+            headers=CUSTOMER_HEADERS,
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "hello",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        expected_cost = round(
+            data["usage"]["input_tokens"] * 1.0 / 1000
+            + data["usage"]["output_tokens"] * 2.0 / 1000,
+            6,
+        )
+        assert data["estimated_cost_cents"] == expected_cost
+
+        summary = custom_client.get(
+            "/api/v1/admin/costs/summary",
+            headers=ADMIN_HEADERS,
+            params={"tenant_id": "demo-tenant"},
+        )
+        assert summary.status_code == 200
+        assert summary.json()["data"]["estimated_cost_cents"] == expected_cost
+    get_settings.cache_clear()
 
 
 def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> None:

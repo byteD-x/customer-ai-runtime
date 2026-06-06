@@ -250,6 +250,12 @@ class HandoffPackage(BaseModel):
     summary: str
     intent: str
     recommended_reply: str
+    issue_summary: str = ""
+    sentiment: str = "neutral"
+    last_user_message: str = ""
+    related_business_objects: dict[str, Any] = Field(default_factory=dict)
+    page_context: dict[str, Any] = Field(default_factory=dict)
+    behavior_signals: dict[str, Any] = Field(default_factory=dict)
     history: list[Message] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
 
@@ -283,6 +289,8 @@ class LLMRequest(BaseModel):
     tool_result: BusinessResult | None = None
     prompt_template: str
     business_context: dict[str, Any] = Field(default_factory=dict)
+    model: str | None = None
+    structured_schema: dict[str, Any] = Field(default_factory=dict)
 
 
 class LLMResponse(BaseModel):
@@ -291,6 +299,13 @@ class LLMResponse(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
     suggested_actions: list[str] = Field(default_factory=list)
     usage: LLMUsage | None = None
+
+
+class LLMStreamChunk(BaseModel):
+    delta: str = ""
+    done: bool = False
+    usage: LLMUsage | None = None
+    response: LLMResponse | None = None
 
 
 class ASRRequest(BaseModel):
@@ -324,6 +339,15 @@ class PromptConfig(BaseModel):
     business_answer: str
     fallback_answer: str
     handoff_summary: str
+
+
+class PromptTemplateRecord(BaseModel):
+    version_id: str = Field(default_factory=lambda: new_id("promptver"))
+    revision: int = 1
+    prompts: PromptConfig
+    active: bool = True
+    change_summary: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class PolicyConfig(BaseModel):

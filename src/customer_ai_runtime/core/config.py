@@ -47,10 +47,15 @@ class Settings(BaseSettings):
     trust_x_forwarded_for: bool = False
     max_request_bytes: int = 3_000_000
     diagnostics_export_path: str | None = None
+    model_input_cost_per_1k_cents: float = 0.1
+    model_output_cost_per_1k_cents: float = 0.1
+    model_price_map_json: str = "{}"
 
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_chat_model: str = "gpt-4.1-mini"
+    openai_timeout_seconds: float = 30.0
+    openai_max_retries: int = 2
     openai_transcription_model: str = "gpt-4o-mini-transcribe"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
@@ -158,6 +163,24 @@ class Settings(BaseSettings):
 
     def get_knowledge_domain_map(self) -> dict[str, object]:
         return json.loads(self.knowledge_domain_map_json or "{}")
+
+    def get_model_price_map(self) -> dict[str, dict[str, float]]:
+        raw = json.loads(self.model_price_map_json or "{}")
+        if not isinstance(raw, dict):
+            return {}
+        price_map: dict[str, dict[str, float]] = {}
+        for key, value in raw.items():
+            if not isinstance(value, dict):
+                continue
+            price_map[str(key)] = {
+                "input_per_1k_cents": float(
+                    value.get("input_per_1k_cents", self.model_input_cost_per_1k_cents)
+                ),
+                "output_per_1k_cents": float(
+                    value.get("output_per_1k_cents", self.model_output_cost_per_1k_cents)
+                ),
+            }
+        return price_map
 
     def _parse_json_dict(self, raw_value: str) -> dict[str, str]:
         raw = json.loads(raw_value or "{}")

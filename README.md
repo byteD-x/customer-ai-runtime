@@ -23,18 +23,19 @@
 - **实时业务数据** - 通过业务工具插件查询订单、物流、工单等动态数据
 - **AI/人工协同** - 智能路由决策，支持高风险识别与人工接管
 - **智能路由增强** - 支持路由置信度分层、`intent_stack` 多轮追踪、`page_context` / `business_objects` 场景感知
-- **运营管理** - Prompt/Policy 管理、会话监控、诊断接口、插件管理
+- **运营管理** - Prompt/Policy 管理、Prompt 版本历史、会话监控、诊断接口、插件管理
 - **质量反馈闭环** - 会话关闭时支持提交满意度评分与解决状态，管理端可汇总平均分、分布与解决状态统计
-- **用户反馈采集** - 消息级支持点赞、点踩、转人工反馈，转人工反馈可直接生成交接包并切换会话状态
+- **用户反馈采集** - 消息级支持点赞、点踩、转人工反馈，转人工反馈可生成结构化交接包并切换会话状态
 - **响应时效追踪** - 会话级记录首响和平均响应时长，管理端支持按渠道汇总
 - **知识库健康巡检** - 管理端支持查看文档数、切片数、平均切片长度、重复切片率、空文档数与健康分
 - **检索失败分析** - 记录知识检索未命中的查询、最高分和渠道，支持按知识库聚合 Top 缺口问题
 - **自动切片优化** - 基于当前切片统计给出推荐 `chunk_max_tokens` / `chunk_overlap`，并可一键生成优化版本
 - **知识版本管理** - 支持版本快照、激活切换与回滚，检索与引用按激活版本隔离
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
-- **低成本治理** - 文本链路记录 LLM token 估算、成本估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存
-- **可复现 RAG 评测** - 提供本地 eval cases 与脚本，验证 route、引用关键词、有效命中率和失败明细
+- **低成本治理** - 文本链路记录 LLM token、可配置模型价格估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存
+- **可复现 RAG 评测** - 提供 8 个本地 eval cases 与脚本，覆盖多知识库、引用关键词、有效命中率和失败明细
 - **人工接管队列** - 基于 Session 的单实例轻量队列，支持技能组、优先级、等待时间排序和 claim-next 认领
+- **受控 Agent 工具流** - 支持白名单工具顺序编排、步骤上限、失败停止和 HTTP trace 返回，默认仅 `admin` / `operator` 可调用
 
 ## 架构概览
 
@@ -113,6 +114,7 @@ source .venv/bin/activate  # Linux/Mac
 pip install -e ".[dev]"
 
 # 若需 Pinecone / Milvus / gRPC / 阿里云 / 腾讯云 提供商
+# providers extra 同时包含 PDF / Word 文档解析依赖
 pip install -e ".[dev,providers]"
 ```
 
@@ -179,6 +181,24 @@ print(response.json())
 - `intent`：当前识别到的主意图
 - `route_decision`：包含 `tool_name`、`reason`、`matched_signals`
 
+### 知识库文件上传
+
+```python
+import httpx
+
+with open("support-policy.md", "rb") as file:
+    response = httpx.post(
+        "http://127.0.0.1:8000/api/v1/knowledge-bases/kb_support/documents/upload",
+        data={"tenant_id": "demo-tenant"},
+        files={"file": ("support-policy.md", file, "text/markdown")},
+        headers={"X-API-Key": "your-api-key"},
+    )
+
+print(response.json())
+```
+
+上传入口会将 UTF-8 文本 / Markdown 文件解析为知识库文档，并复用现有切片、版本与向量写入链路；PDF / Word 解析需要安装 `providers` extra。
+
 ### 路由增强策略
 
 运行时热配置中的 `policies` 支持以下路由增强字段：
@@ -208,24 +228,24 @@ runtime.register_plugin(MyAuthBridgePlugin())
 
 更多示例见 [examples/](examples/) 目录。
 
-### 面试演示与 RAG 评测
+### 面试演示快速验证（5 分钟）
 
-本仓库提供不依赖付费外部服务的本地演示闭环，默认使用 `local` LLM / Vector / Business provider：
+本仓库提供不依赖付费外部服务的本地演示闭环，默认使用 `local` LLM / Vector / Business provider。在已创建 `.venv` 且依赖安装完成后，面试前可用下面命令快速复跑：
 
 ```powershell
-# 完整质量门禁
+# 本地质量门禁：ruff、format check、compileall、mypy、pytest
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
-# RAG 质量评测：route、引用关键词、有效命中率、失败明细
-.venv\Scripts\python.exe scripts\eval_rag.py
+# RAG 质量评测：route、引用关键词、有效命中率、失败明细（JSON 输出）
+.venv\Scripts\python.exe scripts\eval_rag.py --json
 
-# 面试演示：知识问答、缓存命中、业务工具、转人工队列、成本摘要、RAG eval
+# 面试演示：知识问答、缓存命中、业务工具、结构化交接包、转人工队列、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py
-# 或
+# 可选：使用脚本封装演示命令
 powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
 ```
 
-演示输出包含 `route`、`citations`、`tool_result`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。
+当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。补充讲点可聚焦 Prompt 版本历史与回滚、受控 Agent 工具流的白名单和失败停止；上述结果只代表当前本地样例，不代表线上 RAG 准确率、真实成本节省或生产 SLA。
 
 ## 插件扩展
 
@@ -366,7 +386,7 @@ ruff check .
 mypy src
 ```
 
-当前本地质量门禁由 `scripts/test.ps1` 串联执行：`ruff check`、`ruff format --check`、`python -m compileall`、`mypy`、`pytest`。当前仓库未包含远端 CI workflow，不宣称远端 CI 已落地。
+当前本地质量门禁由 `scripts/test.ps1` 串联执行：`ruff check`、`ruff format --check`、`python -m compileall`、`mypy`、`pytest`。当前仓库已包含 GitHub Actions workflow：`.github/workflows/ci.yml`，在 push / pull_request 时执行 `ruff check`、`ruff format --check`、`compileall`、`mypy`、`pytest`；远端是否通过以实际 Actions 运行结果为准。
 
 ## 许可证
 
