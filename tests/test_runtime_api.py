@@ -129,6 +129,63 @@ def test_chat_knowledge_flow(client: TestClient) -> None:
     assert data["latency_ms"]["llm_ms"] >= 0
 
 
+def test_chat_knowledge_stream_flow(client: TestClient) -> None:
+    seed_knowledge_base(client)
+
+    with client.stream(
+        "POST",
+        "/api/v1/chat/messages/stream",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "\u9000\u6b3e\u89c4\u5219\u662f\u4ec0\u4e48\uff1f",
+            "knowledge_base_id": "kb_support",
+        },
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/x-ndjson")
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    assert [event["type"] for event in events] == ["delta", "final"]
+    assert events[0]["delta"]
+    final_payload = events[-1]["data"]
+    assert final_payload["route"] == "knowledge"
+    assert final_payload["answer"]
+    assert final_payload["citations"]
+    assert final_payload["cache_hit"] is False
+    assert final_payload["usage"]["total_tokens"] > 0
+    assert final_payload["latency_ms"]["llm_ms"] >= 0
+
+
+def test_chat_stream_returns_error_event_for_generation_errors(client: TestClient) -> None:
+    with client.stream(
+        "POST",
+        "/api/v1/chat/messages/stream",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "What is refund policy?",
+            "knowledge_base_id": "missing_kb",
+        },
+    ) as response:
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    assert events == [
+        {
+            "type": "error",
+            "error": {
+                "code": "not_found",
+                "message": "\u77e5\u8bc6\u5e93\u4e0d\u5b58\u5728",
+                "details": {},
+                "status_code": 404,
+            },
+        }
+    ]
+
+
 def test_chat_knowledge_refuses_without_effective_citation(client: TestClient) -> None:
     seed_knowledge_base(client)
     policy_update = client.put(

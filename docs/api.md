@@ -204,6 +204,27 @@
 - `reason`
 - `matched_signals`
 
+### `POST /api/v1/chat/messages/stream`
+
+- 用途：发起文本客服流式请求
+- 请求体：与 `POST /api/v1/chat/messages` 相同
+- 响应类型：`application/x-ndjson`
+- 当前实现：复用完整文本客服主链路，输出协议级流式事件；默认本地 `LLMProvider.generate_stream` 仍以完整回答作为单个 delta，真实 token 级增量输出依赖后续接入具备 streaming 能力的 provider。
+- 安全边界：服务端会在幻觉门禁、转人工改写、引用后处理和脱敏完成后再释放最终可展示答案；若 provider 原始 delta 与最终答案不一致，则流式 delta 以最终安全答案为准。
+
+事件示例：
+
+```json
+{"type":"delta","delta":"根据知识库内容，七天无理由退款...","done":true}
+{"type":"final","data":{"session_id":"session_xxx","route":"knowledge","answer":"根据知识库内容，七天无理由退款...","citations":[]}}
+```
+
+错误事件示例：
+
+```json
+{"type":"error","error":{"code":"not_found","message":"知识库不存在","details":{},"status_code":404}}
+```
+
 ### `POST /api/v1/chat/handoff`
 
 - 用途：显式触发转人工

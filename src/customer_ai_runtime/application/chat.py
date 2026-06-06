@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import AsyncIterator, Awaitable, Callable
 from time import perf_counter
 from typing import Any
 
@@ -26,6 +27,7 @@ from customer_ai_runtime.domain.models import (
     BusinessResult,
     DiagnosticLevel,
     LLMRequest,
+    LLMResponse,
     LLMUsage,
     MessageRole,
     RouteType,
@@ -83,6 +85,7 @@ class ChatService:
         integration_context: dict | None = None,
         host_auth_context: HostAuthContext | None = None,
         track_response_timing: bool = True,
+        stream_callback: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> dict:
         started_at = perf_counter() if track_response_timing else None
         session = self.session_service.get_or_create(tenant_id, session_id, channel)
@@ -259,20 +262,25 @@ class ChatService:
             self.metrics.increment("llm_cache_hits")
         else:
             llm_started_at = perf_counter()
-            llm_response = await self.llm_provider.generate(
-                LLMRequest(
-                    tenant_id=tenant_id,
-                    session_id=session.session_id,
-                    route=route_decision.route,
-                    user_message=message,
-                    history=session.messages,
-                    citations=citations,
-                    tool_result=tool_result,
-                    prompt_template=prompt_template,
-                    business_context=business_context.model_dump(mode="json"),
-                    model=selected_model,
-                )
+            llm_request = LLMRequest(
+                tenant_id=tenant_id,
+                session_id=session.session_id,
+                route=route_decision.route,
+                user_message=message,
+                history=session.messages,
+                citations=citations,
+                tool_result=tool_result,
+                prompt_template=prompt_template,
+                business_context=business_context.model_dump(mode="json"),
+                model=selected_model,
             )
+            if stream_callback is None:
+                llm_response = await self.llm_provider.generate(llm_request)
+            else:
+                llm_response = await self._generate_with_stream_callback(
+                    llm_request,
+                    stream_callback,
+                )
             llm_latency_ms = round((perf_counter() - llm_started_at) * 1000, 3)
             usage = llm_response.usage or self._estimate_usage(
                 prompt_template,
@@ -487,6 +495,57 @@ class ChatService:
         response_payload.pop("reason", None)
         return response_payload
 
+    async def process_message_stream(
+        self,
+        tenant_id: str,
+        session_id: str | None,
+        channel: str,
+        message: str,
+        knowledge_base_id: str | None,
+        integration_context: dict | None = None,
+        host_auth_context: HostAuthContext | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        stream_events: list[dict[str, Any]] = []
+
+        async def collect_stream_event(event: dict[str, Any]) -> None:
+            stream_events.append(event)
+
+        result = await self.process_message(
+            tenant_id=tenant_id,
+            session_id=session_id,
+            channel=channel,
+            message=message,
+            knowledge_base_id=knowledge_base_id,
+            integration_context=integration_context,
+            host_auth_context=host_auth_context,
+            stream_callback=collect_stream_event,
+        )
+        answer = str(result.get("answer") or "")
+        streamed_answer = "".join(
+            str(event.get("delta") or "")
+            for event in stream_events
+            if event.get("type") == "delta"
+        )
+        if answer and streamed_answer != answer:
+            stream_events = [
+                {
+                    "type": "delta",
+                    "delta": answer,
+                    "done": True,
+                }
+            ]
+        elif not stream_events and answer:
+            stream_events.append(
+                {
+                    "type": "delta",
+                    "delta": answer,
+                    "done": True,
+                }
+            )
+        for event in stream_events:
+            yield event
+        yield {"type": "final", "data": result}
+
     def _build_response_cache_key(
         self,
         *,
@@ -547,6 +606,38 @@ class ChatService:
             output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
             estimated=True,
+        )
+
+    async def _generate_with_stream_callback(
+        self,
+        request: LLMRequest,
+        stream_callback: Callable[[dict[str, Any]], Awaitable[None]],
+    ) -> LLMResponse:
+        answer_parts: list[str] = []
+        final_response: LLMResponse | None = None
+        usage: LLMUsage | None = None
+        async for chunk in self.llm_provider.generate_stream(request):
+            if chunk.delta:
+                answer_parts.append(chunk.delta)
+                await stream_callback(
+                    {
+                        "type": "delta",
+                        "delta": chunk.delta,
+                        "done": chunk.done,
+                    }
+                )
+            if chunk.usage is not None:
+                usage = chunk.usage
+            if chunk.response is not None:
+                final_response = chunk.response
+
+        if final_response is not None:
+            return final_response
+        return LLMResponse(
+            answer="".join(answer_parts),
+            confidence=0.78 if answer_parts else 0.0,
+            citations=request.citations,
+            usage=usage,
         )
 
     def _estimated_cost_cents(

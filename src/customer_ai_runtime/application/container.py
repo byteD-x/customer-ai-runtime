@@ -32,7 +32,6 @@ from customer_ai_runtime.application.tooling import ToolService
 from customer_ai_runtime.application.voice_rtc import RTCService, VoiceService
 from customer_ai_runtime.core.config import Settings
 from customer_ai_runtime.core.diagnostics_export import DiagnosticsJsonlExporter
-from customer_ai_runtime.providers.aliyun_provider import AliyunASRProvider, AliyunTTSProvider
 from customer_ai_runtime.providers.base import (
     ASRProvider,
     BusinessAdapter,
@@ -40,9 +39,6 @@ from customer_ai_runtime.providers.base import (
     TTSProvider,
     VectorStoreProvider,
 )
-from customer_ai_runtime.providers.graphql_business_provider import GraphQLBusinessAdapter
-from customer_ai_runtime.providers.grpc_business_provider import GrpcBusinessAdapter
-from customer_ai_runtime.providers.http_business_provider import HttpBusinessAdapter
 from customer_ai_runtime.providers.local import (
     LocalASRProvider,
     LocalBusinessAdapter,
@@ -50,15 +46,6 @@ from customer_ai_runtime.providers.local import (
     LocalTTSProvider,
     LocalVectorStoreProvider,
 )
-from customer_ai_runtime.providers.milvus_provider import MilvusVectorStoreProvider
-from customer_ai_runtime.providers.openai_provider import (
-    OpenAIASRProvider,
-    OpenAILLMProvider,
-    OpenAITTSProvider,
-)
-from customer_ai_runtime.providers.pinecone_provider import PineconeVectorStoreProvider
-from customer_ai_runtime.providers.qdrant_provider import QdrantVectorStoreProvider
-from customer_ai_runtime.providers.tencent_provider import TencentASRProvider, TencentTTSProvider
 from customer_ai_runtime.repositories.base import (
     DiagnosticsRepository,
     KnowledgeRepository,
@@ -228,45 +215,71 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
 
 def _build_llm_provider(settings: Settings) -> LLMProvider:
     if settings.llm_provider == "openai":
+        from customer_ai_runtime.providers.openai_provider import OpenAILLMProvider
+
         return OpenAILLMProvider(settings)
     return LocalLLMProvider()
 
 
 def _build_asr_provider(settings: Settings) -> ASRProvider:
     if settings.asr_provider == "openai":
+        from customer_ai_runtime.providers.openai_provider import OpenAIASRProvider
+
         return OpenAIASRProvider(settings)
     if settings.asr_provider == "aliyun":
+        from customer_ai_runtime.providers.aliyun_provider import AliyunASRProvider
+
         return AliyunASRProvider(settings)
     if settings.asr_provider == "tencent":
+        from customer_ai_runtime.providers.tencent_provider import TencentASRProvider
+
         return TencentASRProvider(settings)
     return LocalASRProvider()
 
 
 def _build_tts_provider(settings: Settings) -> TTSProvider:
     if settings.tts_provider == "openai":
+        from customer_ai_runtime.providers.openai_provider import OpenAITTSProvider
+
         return OpenAITTSProvider(settings)
     if settings.tts_provider == "aliyun":
+        from customer_ai_runtime.providers.aliyun_provider import AliyunTTSProvider
+
         return AliyunTTSProvider(settings)
     if settings.tts_provider == "tencent":
+        from customer_ai_runtime.providers.tencent_provider import TencentTTSProvider
+
         return TencentTTSProvider(settings)
     return LocalTTSProvider()
 
 
 def _build_vector_store(settings: Settings) -> VectorStoreProvider:
     if settings.vector_provider == "qdrant":
+        from customer_ai_runtime.providers.qdrant_provider import QdrantVectorStoreProvider
+
         return QdrantVectorStoreProvider(settings)
     if settings.vector_provider == "pinecone":
+        from customer_ai_runtime.providers.pinecone_provider import PineconeVectorStoreProvider
+
         return PineconeVectorStoreProvider(settings)
     if settings.vector_provider == "milvus":
+        from customer_ai_runtime.providers.milvus_provider import MilvusVectorStoreProvider
+
         return MilvusVectorStoreProvider(settings)
     return LocalVectorStoreProvider()
 
 
 def _build_business_adapter(settings: Settings) -> BusinessAdapter:
     if settings.business_provider == "http":
+        from customer_ai_runtime.providers.http_business_provider import HttpBusinessAdapter
+
         return HttpBusinessAdapter(settings)
     if settings.business_provider == "graphql":
+        from customer_ai_runtime.providers.graphql_business_provider import GraphQLBusinessAdapter
+
         return GraphQLBusinessAdapter(settings)
     if settings.business_provider == "grpc":
+        from customer_ai_runtime.providers.grpc_business_provider import GrpcBusinessAdapter
+
         return GrpcBusinessAdapter(settings)
     return LocalBusinessAdapter()

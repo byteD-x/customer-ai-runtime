@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated
 from uuid import uuid4
 
@@ -14,7 +15,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from customer_ai_runtime.api.schemas import (
     AgentToolWorkflowRequest,
@@ -159,6 +160,57 @@ async def chat_message(
         host_auth_context=auth_context.host_auth_context,
     )
     return success_response(result)
+
+
+@router.post("/api/v1/chat/messages/stream")
+async def stream_chat_message(
+    payload: ChatMessageRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> StreamingResponse:
+    container = get_container(request)
+    container.access_control.validate_tenant_access(auth_context, payload.tenant_id)
+
+    async def event_generator():
+        try:
+            async for event in container.chat_service.process_message_stream(
+                tenant_id=payload.tenant_id,
+                session_id=payload.session_id,
+                channel=payload.channel,
+                message=payload.message,
+                knowledge_base_id=payload.knowledge_base_id,
+                integration_context=payload.integration_context,
+                host_auth_context=auth_context.host_auth_context,
+            ):
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+        except AppError as exc:
+            event = {
+                "type": "error",
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details or {},
+                    "status_code": exc.status_code,
+                },
+            }
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+        except Exception as exc:  # pragma: no cover - defensive streaming boundary.
+            event = {
+                "type": "error",
+                "error": {
+                    "code": "internal_error",
+                    "message": "internal server error",
+                    "details": {"type": type(exc).__name__},
+                    "status_code": 500,
+                },
+            }
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/api/v1/chat/handoff")
