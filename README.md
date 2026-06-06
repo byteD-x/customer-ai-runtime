@@ -233,6 +233,9 @@ runtime.register_plugin(MyAuthBridgePlugin())
 本仓库提供不依赖付费外部服务的本地演示闭环，默认使用 `local` LLM / Vector / Business provider。在已创建 `.venv` 且依赖安装完成后，面试前可用下面命令快速复跑：
 
 ```powershell
+# 快速目标化测试：默认跑文本知识问答 + 流式 Chat 正常/错误事件，内置超时保护
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
+
 # 本地质量门禁：ruff、format check、compileall、mypy、pytest
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
@@ -319,16 +322,24 @@ runtime.register_plugin(OrderStatusTool())
 
 ## 测试
 
-```bash
-# 运行所有测试
-pytest
+```powershell
+# 开发中快速验证当前切片，默认 stream suite
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 
-# 运行特定测试
-pytest tests/test_runtime_api.py -v
+# 按预设场景快速回归：stream / api / rag / agent / providers / smoke
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite providers
+
+# 直接跑某个 pytest node，脚本会自动使用 .venv Python 并设置超时
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
+
+# 提交前完整本地门禁
+powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
 # 覆盖率报告
-pytest --cov=src/customer_ai_runtime --cov-report=html
+.venv\Scripts\python.exe -m pytest --cov=src/customer_ai_runtime --cov-report=html
 ```
+
+`scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
 
 ## 行业支持
 

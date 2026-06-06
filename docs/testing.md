@@ -58,8 +58,13 @@
 ## 4. 建议命令
 
 ```powershell
-.venv\Scripts\python.exe -m pytest
+# 快速目标化测试：默认跑 stream 链路，内置超时保护
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite rag
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
+# 完整本地质量门禁
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
+.venv\Scripts\python.exe -m pytest
 .venv\Scripts\python.exe scripts\eval_rag.py
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json
 .venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
@@ -76,6 +81,17 @@ python -m ruff check .
 python -m ruff format --check .
 python -m compileall -q src tests
 ```
+
+`scripts/test-fast.ps1` 用于开发中的目标化回归，不替代提交前完整门禁。当前预设：
+
+- `stream`：文本知识问答 + 流式 Chat 正常/错误事件，默认 suite。
+- `api`：完整 runtime API 集成测试。
+- `rag`：RAG 质量与面试材料一致性测试。
+- `agent`：受控多工具工作流测试。
+- `providers`：可选 provider、云厂商 speech provider 与 OpenAI prompt 组装测试。
+- `smoke`：插件、路由、回复后处理和限流主体等低成本冒烟测试。
+
+脚本默认使用 `.venv\Scripts\python.exe`，如果不存在则退回 `python`；默认超时为 120 秒，可用 `-TimeoutSeconds` 调整。若超时，脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr，便于定位卡住点。
 
 ## 5. 验收重点
 

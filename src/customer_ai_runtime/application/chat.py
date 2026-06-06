@@ -522,9 +522,7 @@ class ChatService:
         )
         answer = str(result.get("answer") or "")
         streamed_answer = "".join(
-            str(event.get("delta") or "")
-            for event in stream_events
-            if event.get("type") == "delta"
+            str(event.get("delta") or "") for event in stream_events if event.get("type") == "delta"
         )
         if answer and streamed_answer != answer:
             stream_events = [

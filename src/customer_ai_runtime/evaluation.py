@@ -221,6 +221,8 @@ def _faithfulness_score(
     check = result.get("hallucination_check")
     if isinstance(check, dict):
         raw_score = check.get("faithfulness_score")
+        if raw_score is None:
+            return None
         try:
             return round(float(raw_score), 4)
         except (TypeError, ValueError):
