@@ -10,12 +10,12 @@
 
 - 已有单体参考实现，可运行文本、语音、RTC、知识库、基础工具与人工协同。
 - 运行模式支持独立 FastAPI 与宿主 FastAPI 挂载。
-- 已落地成本摘要、知识问答安全缓存、RAG eval 脚本与单实例人工接管队列。
+- 已落地成本摘要、知识问答安全缓存、RAG eval 本地标注样例、外部 readiness 脚本与单实例人工接管队列。
 
 ### 2.2 Target State
 
 - 保持单体可运行，同时保留未来拆分为多服务的边界。
-- 多实例人工接管队列、真实模型账单计费、真实业务标注集评测属于 future target。
+- 多实例人工接管队列、真实模型账单计费、真实业务标注集评测和真实外部系统端到端联调属于 future target。
 
 ## 3. 分层架构
 
@@ -82,7 +82,7 @@
 - `Session` 管理会话生命周期。
 - `Route Orchestrator` 决定知识、业务、人工、高风险、插件路线，并执行置信度分层。
 - `LLM Orchestrator` 融合检索结果、实时数据和上下文。
-- `Cost Governance` 记录 usage、cache hit、估算成本和预算状态。
+- `Cost Governance` 记录 usage、usage 来源、币种、账期、cache hit、估算成本和本地预算阈值。
 - `RTC` 服务直接处理实时热路径，不通过事件总线。
 
 ### 4.4 业务增强层
@@ -115,15 +115,16 @@
 11. 若为业务型：`Business Tool Plugins` 或 `BusinessAdapter` 调实时接口，业务结果不缓存。
 12. `LLM / Response Enhancement` 生成回复。
 13. `Human Handoff Plugins` 判断是否转人工，并写入接管队列字段。
-14. 记录 usage、cache hit、估算成本、预算状态与诊断事件。
+14. 记录 usage、usage 来源、币种、账期、cache hit、估算成本、本地预算阈值与诊断事件。
 15. `Response Post Processor Plugins` 完成脱敏、格式化、多语言或结构化输出。
 
 ### 5.4 面试演示与离线评测链路
 
 1. `examples/interview_demo.py` 使用本地临时存储和默认 provider 启动 TestClient。
 2. 依次演示知识问答、重复知识问答缓存命中、业务工具查询、风险转人工、队列认领、成本摘要。
-3. `scripts/eval_rag.py` 使用本地 eval cases 验证 route、引用关键词、有效命中率和失败明细。
-4. 该链路用于可复现演示，不代表线上准确率或生产压测结果。
+3. `scripts/eval_rag.py` 使用本地标注 eval cases 验证 route、引用关键词、有效命中率、cohort、人工复核状态、`offline_accuracy` 和失败明细。
+4. `scripts/check_external_readiness.py` 检查 OpenAI / Qdrant / 业务 API / 客服工单 API 的配置与健康状态；未配置时返回 `skipped`。
+5. 该链路用于可复现演示，不代表线上准确率、真实成本、外部联调通过或生产压测结果。
 
 ### 5.2 语音请求
 
@@ -158,8 +159,8 @@
 - 单体 FastAPI 参考实现
 - 本地 JSON 持久化
 - 可选 OpenAI / Qdrant / HTTP Business Adapter
-- 单实例 handoff queue 基于 `Session` 状态字段排序
-- RAG eval 与 interview demo 默认只依赖本地 provider
+- 单实例人工接管队列基于 `Session` 状态字段排序，`atomic_claim=true` 只代表单进程锁内认领
+- RAG eval 与 interview demo 默认只依赖本地 provider；readiness 脚本未配置外部凭据时返回 `skipped`
 
 ### 7.2 Future Target
 
@@ -179,4 +180,4 @@
 - 静态知识与实时业务数据必须分离处理。
 - 认证与上下文映射必须插件化，不把宿主逻辑写死到主流程。
 - 成本治理必须区分知识问答缓存与实时业务查询，不能用缓存牺牲业务正确性。
-- 离线 eval 只证明当前 case 可复现，不宣称线上准确率。
+- 离线 eval 只证明当前本地标注 case 可复现，不宣称线上准确率。

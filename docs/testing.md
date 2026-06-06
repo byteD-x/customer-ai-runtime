@@ -61,6 +61,7 @@
 .venv\Scripts\python.exe -m pytest
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe scripts\eval_rag.py
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json
 .venv\Scripts\python.exe examples\interview_demo.py
 ```
 
@@ -88,9 +89,10 @@ python -m compileall -q src tests
 - 知识库效果分析应能输出命中率、满意度与负反馈率
 - 知识问答首次请求应 `cache_hit=false`，重复同一安全知识问答应 `cache_hit=true`
 - 业务工具查询必须保持 `cache_hit=false`，避免缓存实时订单/售后状态
-- 成本摘要应按 provider、route 聚合 token、基于本地模型价格表的估算成本和缓存命中
-- 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领
-- RAG eval 应覆盖 8 个本地 cases、多知识库、命中、低分未命中、引用关键词失败明细
+- 成本摘要应按 provider、route 聚合 token、usage 来源、币种、账期、本地预算阈值、基于本地模型价格表的估算成本和缓存命中
+- 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领，并返回 `queue_backend` / `atomic_claim` 当前后端口径
+- RAG eval 应覆盖 8 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细
+- 外部 readiness 脚本在缺少 OpenAI / Qdrant / 业务 API / 工单 API 配置时应返回 `skipped`，不能误报为通过联调
 - 面试演示脚本应输出 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`
 - 缺失 API Key 时可由宿主桥接完成认证
 - 不同行业上下文能影响路由与工具选择
@@ -99,6 +101,7 @@ python -m compileall -q src tests
 ## 6. 当前不可验证项
 
 - 若未配置真实 OpenAI / Qdrant / 外部业务系统，只能验证本地默认提供商链路，不能宣称外部联调已通过。
-- `scripts/eval_rag.py` 使用本地 provider 与临时存储，验证的是可重复的离线评测闭环，不代表线上准确率。
+- `scripts/check_external_readiness.py` 只检查可选外部依赖配置和健康状态；未配置时为 `skipped`，不代表外部联调失败或通过。
+- `scripts/eval_rag.py` 使用本地 provider 与临时存储，验证的是可重复的本地标注样例离线评测闭环，不代表线上准确率。
 - 当前成本为本地模型价格表估算，不代表真实 provider 账单或线上节省比例。
 - `examples/interview_demo.py` 是面试演示脚本，用于串起本地闭环，不代表生产压测结果。

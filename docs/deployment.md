@@ -98,6 +98,12 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 - Qdrant
   `CUSTOMER_AI_QDRANT_URL`
   `CUSTOMER_AI_QDRANT_API_KEY`
+- 外部业务 HTTP API
+  `CUSTOMER_AI_BUSINESS_API_BASE_URL`
+  `CUSTOMER_AI_BUSINESS_API_KEY`
+- 外部客服工单 API readiness 检查
+  `CUSTOMER_AI_TICKET_API_BASE_URL`
+  `CUSTOMER_AI_TICKET_API_KEY`
 
 ### 3.4 宿主桥接与认证
 
@@ -195,12 +201,13 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe scripts\eval_rag.py --json
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json
 .venv\Scripts\python.exe examples\interview_demo.py
 ```
 
 当前本地实测基线为：`scripts/test.ps1` 通过、RAG eval 8 cases passed、`examples/interview_demo.py` 跑通；`pytest` 数量以实际门禁输出为准。
 
-上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省或生产压测结果。
+上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省、外部 provider 联调通过或生产压测结果。`scripts/check_external_readiness.py` 只检查可选外部依赖的配置与健康状态；未配置凭据时返回 `skipped`。
 
 ## 7. 当前限制
 
@@ -209,9 +216,9 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 - 观测能力以管理接口和本地持久化事件为主，尚未内建 Prometheus exporter
 - Docker Compose 适合单机或小规模环境，不等同于高可用生产集群方案
 - 当前存储层仍以本地 JSON 仓储为主，更适合开发、演示和轻量部署
-- 当前人工接管队列基于本地 `Session` 状态排序，未提供多实例原子认领
+- 当前人工接管队列基于本地 `Session` 状态排序，提供单进程原子认领；未提供多实例原子认领
 - 当前成本统计支持本地模型价格表估算和 provider usage 治理入口，未接入真实租户账单结算
-- 当前 RAG eval 为离线小样本脚本，未接入真实标注集、灰度流量和人工复核
+- 当前 RAG eval 为离线本地标注样例脚本，包含 cohort 与人工复核状态字段；未接入真实业务标注集、线上灰度流量和人工复核系统
 
 ## 7.1 安全与保护性配置（当前实现）
 

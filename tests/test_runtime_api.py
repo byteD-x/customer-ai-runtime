@@ -864,6 +864,10 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert first_data["route"] == "knowledge"
     assert first_data["cache_hit"] is False
     assert first_data["usage"]["total_tokens"] > 0
+    assert first_data["usage_source"] == "estimated"
+    assert first_data["billing_currency"] == "USD"
+    assert first_data["billing_period"] == "per_request"
+    assert first_data["tenant_budget_estimated_cents"] == 50.0
 
     second = client.post(
         "/api/v1/chat/messages",
@@ -905,9 +909,15 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert cost_data["sample_size"] >= 3
     assert cost_data["cache_hits"] >= 1
     assert cost_data["total_tokens"] > 0
+    assert cost_data["provider_usage_records"] == 0
+    assert cost_data["usage_source_counts"]["estimated"] >= 3
+    assert cost_data["billing_currency_counts"]["USD"] >= 3
+    assert cost_data["billing_period_counts"]["per_request"] >= 3
+    assert cost_data["tenant_budget_estimated_cents"] == 50.0
     assert "local" in cost_data["by_provider"]
     assert "knowledge" in cost_data["by_route"]
     assert "business" in cost_data["by_route"]
+    assert cost_data["by_provider"]["local"]["estimated_usage_records"] >= 3
 
 
 def test_chat_cost_uses_configured_model_price_map(
@@ -932,6 +942,9 @@ def test_chat_cost_uses_configured_model_price_map(
         )
         assert response.status_code == 200
         data = response.json()["data"]
+        assert data["usage_source"] == "estimated"
+        assert data["billing_currency"] == "USD"
+        assert data["billing_period"] == "per_request"
         expected_cost = round(
             data["usage"]["input_tokens"] * 1.0 / 1000
             + data["usage"]["output_tokens"] * 2.0 / 1000,
@@ -945,7 +958,10 @@ def test_chat_cost_uses_configured_model_price_map(
             params={"tenant_id": "demo-tenant"},
         )
         assert summary.status_code == 200
-        assert summary.json()["data"]["estimated_cost_cents"] == expected_cost
+        summary_data = summary.json()["data"]
+        assert summary_data["estimated_cost_cents"] == expected_cost
+        assert summary_data["usage_source_counts"]["estimated"] == 1
+        assert summary_data["billing_currency_counts"]["USD"] == 1
     get_settings.cache_clear()
 
 
@@ -986,6 +1002,8 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     assert len(queue_data) >= 2
     assert queue_data[0]["priority"] >= queue_data[1]["priority"]
     assert queue_data[0]["skill_group"] == "risk"
+    assert queue_data[0]["queue_backend"] == "local"
+    assert queue_data[0]["atomic_claim"] is True
 
     filtered = client.get(
         "/api/v1/admin/handoff/queue",
@@ -1011,6 +1029,8 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     assert claimed["state"] == "human_in_service"
     assert claimed["waiting_human"] is False
     assert claimed["assigned_operator_id"] == "op_1"
+    assert claimed["queue_backend"] == "local"
+    assert claimed["atomic_claim"] is True
 
     after_claim = client.get(
         "/api/v1/admin/handoff/queue",

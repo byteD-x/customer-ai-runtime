@@ -340,8 +340,15 @@ class ChatService:
         budget_status = (
             "alert" if estimated_cost_cents >= policies.cost_alert_estimated_cents else "ok"
         )
+        usage_source = "estimated" if usage.estimated else "provider"
+        billing_currency = "USD"
+        billing_period = "per_request"
         response_payload["estimated_cost_cents"] = estimated_cost_cents
         response_payload["budget_status"] = budget_status
+        response_payload["usage_source"] = usage_source
+        response_payload["billing_currency"] = billing_currency
+        response_payload["billing_period"] = billing_period
+        response_payload["tenant_budget_estimated_cents"] = policies.cost_alert_estimated_cents
         self._record_cost(
             tenant_id=tenant_id,
             session_id=session.session_id,
@@ -352,6 +359,10 @@ class ChatService:
             cache_hit=cache_hit,
             estimated_cost_cents=estimated_cost_cents,
             budget_status=budget_status,
+            usage_source=usage_source,
+            billing_currency=billing_currency,
+            billing_period=billing_period,
+            tenant_budget_estimated_cents=policies.cost_alert_estimated_cents,
         )
         self.session_service.add_message(
             session,
@@ -371,6 +382,7 @@ class ChatService:
                 else None,
                 "cache_hit": cache_hit,
                 "estimated_cost_cents": estimated_cost_cents,
+                "usage_source": usage_source,
             },
         )
         duration_ms: int | None = None
@@ -487,6 +499,10 @@ class ChatService:
         cache_hit: bool,
         estimated_cost_cents: float,
         budget_status: str,
+        usage_source: str,
+        billing_currency: str,
+        billing_period: str,
+        tenant_budget_estimated_cents: float,
     ) -> None:
         self.diagnostics.record(
             DiagnosticLevel.INFO,
@@ -504,8 +520,12 @@ class ChatService:
                 "output_tokens": usage.output_tokens,
                 "total_tokens": usage.total_tokens,
                 "usage_estimated": usage.estimated,
+                "usage_source": usage_source,
                 "estimated_cost_cents": estimated_cost_cents,
                 "budget_status": budget_status,
+                "billing_currency": billing_currency,
+                "billing_period": billing_period,
+                "tenant_budget_estimated_cents": tenant_budget_estimated_cents,
             },
         )
 

@@ -32,9 +32,9 @@
 - **自动切片优化** - 基于当前切片统计给出推荐 `chunk_max_tokens` / `chunk_overlap`，并可一键生成优化版本
 - **知识版本管理** - 支持版本快照、激活切换与回滚，检索与引用按激活版本隔离
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
-- **低成本治理** - 文本链路记录 LLM token、可配置模型价格估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存
-- **可复现 RAG 评测** - 提供 8 个本地 eval cases 与脚本，覆盖多知识库、引用关键词、有效命中率和失败明细
-- **人工接管队列** - 基于 Session 的单实例轻量队列，支持技能组、优先级、等待时间排序和 claim-next 认领
+- **低成本治理** - 文本链路记录 LLM token、usage 来源、币种、账期、可配置模型价格估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存
+- **可复现 RAG 评测** - 提供 8 个本地标注 eval cases 与脚本，覆盖多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、有效命中率和失败明细
+- **人工接管队列** - 基于 Session 的单实例本地队列，支持技能组、优先级、等待时间排序和单进程原子 claim-next 认领
 - **受控 Agent 工具流** - 支持白名单工具顺序编排、步骤上限、失败停止和 HTTP trace 返回，默认仅 `admin` / `operator` 可调用
 
 ## 架构概览
@@ -239,13 +239,16 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 # RAG 质量评测：route、引用关键词、有效命中率、失败明细（JSON 输出）
 .venv\Scripts\python.exe scripts\eval_rag.py --json
 
+# 外部联调 readiness：未配置凭据时返回 skipped，不宣称真实联调通过
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json
+
 # 面试演示：知识问答、缓存命中、业务工具、结构化交接包、转人工队列、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py
 # 可选：使用脚本封装演示命令
 powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
 ```
 
-当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。补充讲点可聚焦 Prompt 版本历史与回滚、受控 Agent 工具流的白名单和失败停止；上述结果只代表当前本地样例，不代表线上 RAG 准确率、真实成本节省或生产 SLA。
+当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。`check_external_readiness.py` 只检查可选外部依赖的配置与健康状态，未配置时返回 `skipped`；只有真实凭据、网络和外部系统可达时才能声明对应联调通过。上述结果只代表当前本地样例，不代表线上 RAG 准确率、真实成本节省、外部 provider 联调结果或生产 SLA。
 
 ## 插件扩展
 

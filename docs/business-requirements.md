@@ -27,8 +27,8 @@
 ### 2.1 当前事实
 
 - 当前仓库已具备文本/语音/RTC/知识库/业务工具/人工接手/API/示例/测试能力。
-- 当前仓库已落地 `Auth Bridge`、插件平台、行业增强联合编排、多认证桥接、宿主上下文解析、成本治理、本地模型价格表、RAG eval、结构化交接包与单实例人工接管队列。
-- 当前仓库默认使用本地 provider 可完整演示；真实 OpenAI/Qdrant/外部业务系统联调依赖外部配置。
+- 当前仓库已落地 `Auth Bridge`、插件平台、行业增强联合编排、多认证桥接、宿主上下文解析、成本治理、本地模型价格表、RAG eval 本地标注样例、结构化交接包与单实例人工接管队列。
+- 当前仓库默认使用本地 provider 可完整演示；真实 OpenAI / Qdrant / 外部业务系统 / 客服工单系统联调依赖外部配置，readiness 脚本只检查配置与健康状态。
 
 ### 2.2 Target State
 
@@ -118,8 +118,8 @@
 - Prompt / Policy 管理
 - 会话检索
 - 指标分析
-- 成本摘要：provider、route、token、基于本地模型价格表的估算成本、缓存命中
-- RAG eval：route、引用关键词、有效命中、失败明细
+- 成本摘要：provider、route、token、usage 来源、币种、账期、本地预算阈值、基于本地模型价格表的估算成本、缓存命中
+- RAG eval：dataset、cohort、人工复核状态、route、引用关键词、有效命中、`offline_accuracy`、失败明细
 - 故障排查
 - 灰度与回滚
 
@@ -181,9 +181,9 @@
 - 语音首包时延：ASR 首结果或 TTS 首片段返回的 p50 / p95
 - RTC 轮次成功率：单轮通话从音频输入到音频回推的成功比例
 - 知识问答缓存命中率：知识类请求中命中安全缓存的比例
-- 单轮估算成本：按 provider / route 聚合的 token 与估算成本
-- RAG eval 通过率：离线 case 中 route、引用关键词和有效命中均通过的比例
-- 人工接管等待时长：按技能组统计 waiting_human 到 claim-next 的等待时间
+- 单轮估算成本：按 provider / route 聚合 token、usage 来源、币种、账期、本地预算阈值与估算成本
+- RAG eval 通过率 / `offline_accuracy`：本地标注 case 中 route、引用关键词和有效命中均通过的比例
+- 人工接管等待时长：按技能组统计 waiting_human 到 claim-next 的等待时间；当前 `atomic_claim` 只代表单进程锁内认领
 
 ## 8. 最小安全模型
 
@@ -200,4 +200,4 @@
 - 可解释：路由结果需要输出 `confidence`、`confidence_band`、`intent` 与命中信号。
 - 可验证：单元测试、集成测试、关键链路测试、挂载与鉴权桥接测试。
 - 低成本：默认本地 provider 可跑，外部付费服务作为可选增强。
-- 可复现：面试演示、RAG eval 和完整测试门禁都应提供本地命令。
+- 可复现：面试演示、RAG eval、外部 readiness 和完整测试门禁都应提供本地命令。

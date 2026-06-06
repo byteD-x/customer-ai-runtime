@@ -64,9 +64,9 @@
 - `Industry Adapter`：按行业差异增强路由和上下文
 - `ASR / TTS / RTC`：语音与实时通话链路
 - `Handoff Service`：AI 与人工协同
-- `LLMUsage / Cost Summary`：token、缓存命中、估算成本与预算告警
-- `RAG Eval`：离线 case 驱动的检索质量验证
-- `Handoff Queue`：基于会话状态的单实例人工接管队列
+- `LLMUsage / Cost Summary`：token、usage 来源、币种、账期、缓存命中、估算成本与本地预算阈值
+- `RAG Eval`：本地标注 case 驱动的检索质量验证
+- `Handoff Queue`：基于会话状态的单实例人工接管队列，`atomic_claim` 仅表示单进程锁内认领
 
 ## 8. 系统如何运行
 
@@ -74,12 +74,12 @@
 
 - 当前为单体 FastAPI 参考实现。
 - 可作为独立服务或挂载子应用运行。
-- 已具备多认证桥接、插件注册中心、行业增强主链路、成本治理、RAG eval 与人工接管队列。
+- 已具备多认证桥接、插件注册中心、行业增强主链路、成本治理、RAG eval 本地标注样例、外部 readiness 脚本与人工接管队列。
 
 ### Target State
 
 - 后续可按边界拆分为多服务。
-- 多实例人工接管队列、真实客服工单系统、真实 OpenAI/Qdrant/业务系统联调属于 future target，不能写成当前事实。
+- 多实例人工接管队列、真实客服工单系统、真实 OpenAI / Qdrant / 业务系统联调属于 future target，不能写成当前事实。
 
 ## 9. 如何接入
 
@@ -100,7 +100,7 @@
 
 - 通过 Admin API 维护 Prompt / Policy / Plugin 状态
 - 通过 Diagnostics / Metrics 做排障
-- 通过 Cost Summary 观察模型成本、缓存命中和预算风险
-- 通过 RAG Eval 脚本做离线质量回归
+- 通过 Cost Summary 观察模型成本、usage 来源、币种、账期、缓存命中和预算风险
+- 通过 RAG Eval 脚本做本地标注样例质量回归
 - 通过 Handoff Queue 管理人工接管优先级与认领
 - 通过文档和进展控制约束设计与实现一致性

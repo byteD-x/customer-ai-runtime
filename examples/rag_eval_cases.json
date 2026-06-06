@@ -56,6 +56,13 @@
   "cases": [
     {
       "case_id": "refund_policy_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "support_baseline",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "policy",
+        "reviewer": "local_fixture"
+      },
       "question": "What is refund policy?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
@@ -68,6 +75,13 @@
     },
     {
       "case_id": "support_sla_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "support_baseline",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "sla",
+        "reviewer": "local_fixture"
+      },
       "question": "What is support response SLA?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
@@ -79,6 +93,13 @@
     },
     {
       "case_id": "refund_payment_proof_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "support_baseline",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "required_evidence",
+        "reviewer": "local_fixture"
+      },
       "question": "What should I keep for a refund request?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
@@ -91,6 +112,13 @@
     },
     {
       "case_id": "low_score_miss",
+      "dataset_id": "local_interview_v1",
+      "cohort": "negative_control",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "no_effective_hit",
+        "reviewer": "local_fixture"
+      },
       "question": "Where is the end of universe?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
@@ -100,6 +128,13 @@
     },
     {
       "case_id": "business_unrelated_miss",
+      "dataset_id": "local_interview_v1",
+      "cohort": "negative_control",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "no_effective_hit",
+        "reviewer": "local_fixture"
+      },
       "question": "How do I configure Kubernetes autoscaling?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
@@ -109,6 +144,13 @@
     },
     {
       "case_id": "saas_scim_sync_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "saas_baseline",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "procedure_sla",
+        "reviewer": "local_fixture"
+      },
       "question": "How long do SCIM provisioning changes take to sync?",
       "knowledge_base_id": "kb_saas",
       "expected_route": "knowledge",
@@ -121,6 +163,13 @@
     },
     {
       "case_id": "saas_audit_retention_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "saas_baseline",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "retention_policy",
+        "reviewer": "local_fixture"
+      },
       "question": "How long is audit log export retained?",
       "knowledge_base_id": "kb_saas",
       "expected_route": "knowledge",
@@ -133,6 +182,13 @@
     },
     {
       "case_id": "feedback_replay_refund_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "feedback_replay",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "handoff_context",
+        "reviewer": "local_fixture"
+      },
       "question": "What should be replayed for negative refund feedback?",
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",

@@ -3,6 +3,10 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from customer_ai_runtime.application.handoff_queue import (
+    HandoffQueueBackend,
+    LocalHandoffQueueBackend,
+)
 from customer_ai_runtime.application.knowledge import KnowledgeService
 from customer_ai_runtime.application.plugins import PluginRegistry
 from customer_ai_runtime.application.runtime import (
@@ -42,6 +46,7 @@ class AdminService:
         metrics: MetricsService,
         diagnostics: DiagnosticsService,
         plugin_registry: PluginRegistry,
+        handoff_queue: HandoffQueueBackend | None = None,
     ) -> None:
         self.settings = settings
         self.session_service = session_service
@@ -52,6 +57,7 @@ class AdminService:
         self.metrics = metrics
         self.diagnostics_service = diagnostics
         self.plugin_registry = plugin_registry
+        self.handoff_queue = handoff_queue or LocalHandoffQueueBackend(session_service)
 
     def list_sessions(self, tenant_id: str) -> list[dict[str, Any]]:
         return [
@@ -66,7 +72,7 @@ class AdminService:
     ) -> list[dict[str, Any]]:
         return [
             self._handoff_queue_item(session)
-            for session in self._waiting_handoff_sessions(tenant_id, skill_group)
+            for session in self.handoff_queue.list_waiting(tenant_id, skill_group)
         ]
 
     def claim_next_handoff(
@@ -75,14 +81,13 @@ class AdminService:
         skill_group: str | None = None,
         operator_id: str | None = None,
     ) -> dict[str, Any] | None:
-        sessions = self._waiting_handoff_sessions(tenant_id, skill_group)
-        if not sessions:
-            return None
-        claimed = self.session_service.claim_human(
+        claimed = self.handoff_queue.claim_next(
             tenant_id,
-            sessions[0].session_id,
+            skill_group=skill_group,
             operator_id=operator_id,
         )
+        if claimed is None:
+            return None
         return self._handoff_queue_item(claimed)
 
     def get_metrics(self) -> dict[str, Any]:
@@ -100,6 +105,11 @@ class AdminService:
         total_cost = 0.0
         cache_hits = 0
         alert_count = 0
+        provider_usage_records = 0
+        usage_source_counts: Counter[str] = Counter()
+        billing_currency_counts: Counter[str] = Counter()
+        billing_period_counts: Counter[str] = Counter()
+        tenant_budget_estimated_cents: float | None = None
         for event in events:
             context = event.context
             provider = str(context.get("provider") or "unknown")
@@ -107,14 +117,45 @@ class AdminService:
             tokens = int(context.get("total_tokens") or 0)
             cost = float(context.get("estimated_cost_cents") or 0.0)
             cache_hit = bool(context.get("cache_hit"))
+            usage_source = str(
+                context.get("usage_source")
+                or ("estimated" if bool(context.get("usage_estimated", True)) else "provider")
+            )
+            billing_currency = str(context.get("billing_currency") or "USD")
+            billing_period = str(context.get("billing_period") or "per_request")
             total_tokens += tokens
             total_cost += cost
             if cache_hit:
                 cache_hits += 1
             if context.get("budget_status") == "alert":
                 alert_count += 1
-            self._accumulate_cost(provider_summary, provider, tokens, cost, cache_hit)
-            self._accumulate_cost(route_summary, route, tokens, cost, cache_hit)
+            if usage_source == "provider":
+                provider_usage_records += 1
+            usage_source_counts[usage_source] += 1
+            billing_currency_counts[billing_currency] += 1
+            billing_period_counts[billing_period] += 1
+            budget_value = context.get("tenant_budget_estimated_cents")
+            if isinstance(budget_value, (int, float)):
+                tenant_budget_estimated_cents = max(
+                    tenant_budget_estimated_cents or 0.0,
+                    float(budget_value),
+                )
+            self._accumulate_cost(
+                provider_summary,
+                provider,
+                tokens,
+                cost,
+                cache_hit,
+                usage_source,
+            )
+            self._accumulate_cost(
+                route_summary,
+                route,
+                tokens,
+                cost,
+                cache_hit,
+                usage_source,
+            )
         request_count = len(events)
         return {
             "tenant_id": tenant_id,
@@ -124,6 +165,11 @@ class AdminService:
             "cache_hits": cache_hits,
             "cache_hit_rate": 0.0 if request_count == 0 else round(cache_hits / request_count, 4),
             "budget_alerts": alert_count,
+            "provider_usage_records": provider_usage_records,
+            "usage_source_counts": dict(usage_source_counts),
+            "billing_currency_counts": dict(billing_currency_counts),
+            "billing_period_counts": dict(billing_period_counts),
+            "tenant_budget_estimated_cents": tenant_budget_estimated_cents,
             "by_provider": provider_summary,
             "by_route": route_summary,
         }
@@ -761,28 +807,6 @@ class AdminService:
     def disable_plugin(self, plugin_id: str) -> dict[str, Any]:
         return self.plugin_registry.disable(plugin_id).model_dump(mode="json")
 
-    def _waiting_handoff_sessions(
-        self,
-        tenant_id: str,
-        skill_group: str | None = None,
-    ) -> list[Session]:
-        sessions = [
-            session
-            for session in self.session_service.list_by_tenant(tenant_id)
-            if session.waiting_human
-        ]
-        if skill_group:
-            sessions = [
-                session for session in sessions if session.handoff_skill_group == skill_group
-            ]
-        sessions.sort(
-            key=lambda session: (
-                -session.handoff_priority,
-                session.handoff_enqueued_at or session.updated_at,
-            )
-        )
-        return sessions
-
     def _handoff_queue_item(self, session: Session) -> dict[str, Any]:
         return {
             "tenant_id": session.tenant_id,
@@ -799,6 +823,8 @@ class AdminService:
             "message_count": len(session.messages),
             "last_intent": session.last_intent,
             "last_route": None if session.last_route is None else session.last_route.value,
+            "queue_backend": self.handoff_queue.name,
+            "atomic_claim": self.handoff_queue.atomic_claim,
         }
 
     def _accumulate_cost(
@@ -808,6 +834,7 @@ class AdminService:
         tokens: int,
         cost: float,
         cache_hit: bool,
+        usage_source: str,
     ) -> None:
         bucket = summary.setdefault(
             key,
@@ -816,6 +843,8 @@ class AdminService:
                 "total_tokens": 0,
                 "estimated_cost_cents": 0.0,
                 "cache_hits": 0,
+                "provider_usage_records": 0,
+                "estimated_usage_records": 0,
             },
         )
         bucket["request_count"] += 1
@@ -823,6 +852,10 @@ class AdminService:
         bucket["estimated_cost_cents"] = round(bucket["estimated_cost_cents"] + cost, 6)
         if cache_hit:
             bucket["cache_hits"] += 1
+        if usage_source == "provider":
+            bucket["provider_usage_records"] += 1
+        else:
+            bucket["estimated_usage_records"] += 1
 
     def _knowledge_effectiveness_recommendation(
         self,

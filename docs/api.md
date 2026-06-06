@@ -174,6 +174,10 @@
 - `usage`：LLM token 用量，默认本地 provider 返回估算值
 - `estimated_cost_cents`：按本地模型价格表估算的本轮成本，单位为美分
 - `budget_status`：`ok` / `alert`
+- `usage_source`：`estimated` / `provider`，区分本地估算用量与真实 provider usage
+- `billing_currency`：当前本地估算统一为 `USD`
+- `billing_period`：当前本地口径为 `per_request`
+- `tenant_budget_estimated_cents`：当前策略中的本地预算告警阈值，仍不是租户真实账单额度
 
 `handoff` 为结构化交接包，当前重点字段包括：
 
@@ -363,8 +367,15 @@
   - `cache_hits`
   - `cache_hit_rate`
   - `budget_alerts`
+  - `provider_usage_records`
+  - `usage_source_counts`
+  - `billing_currency_counts`
+  - `billing_period_counts`
+  - `tenant_budget_estimated_cents`
   - `by_provider`
   - `by_route`
+
+说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；真实账单结算还需要 provider 原生账单、租户预算、币种和账期系统对接。
 
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
 
@@ -383,6 +394,8 @@
   - `handoff_reason`
   - `enqueued_at`
   - `assigned_operator_id`
+  - `queue_backend`：当前默认 `local`
+  - `atomic_claim`：当前默认 `true`，表示单进程锁内认领，不代表多实例队列一致性
 
 ### `POST /api/v1/admin/handoff/claim-next`
 

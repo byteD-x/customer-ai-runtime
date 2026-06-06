@@ -63,7 +63,7 @@
 6. 业务型问题走 `Real-time Business Data Provider`，结果保持实时，不缓存。
 7. `Response Enhancement Orchestrator` 合并知识引用、动态数据和上下文。
 8. `ResponsePostProcessorPlugin` 做格式化、脱敏、多语言和结构化转换。
-9. Chat 链路记录 usage、cache hit、估算成本和预算状态，供管理端成本摘要聚合。
+9. Chat 链路记录 usage、usage 来源、币种、账期、cache hit、估算成本和本地预算阈值，供管理端成本摘要聚合。
 
 ## 4. 行业增强策略
 
@@ -104,4 +104,4 @@
 - 同一租户可装配多个行业插件，但单次请求只使用一个主行业上下文。
 - 实时业务数据不得写入通用知识库代替实时查询。
 - 低成本治理不能牺牲业务正确性：只缓存安全知识问答，不缓存订单、物流、售后、账号、工单等实时查询。
-- RAG eval 只用于离线 case 回归，应同时检查 route、引用关键词和有效命中；不能把小样本通过率写成线上准确率。
+- RAG eval 只用于本地标注样例回归，应同时检查 dataset、cohort、人工复核状态、route、引用关键词和有效命中；不能把本地 `offline_accuracy` 写成线上准确率。

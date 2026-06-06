@@ -54,10 +54,14 @@
 - `output_tokens`
 - `total_tokens`
 - `usage_estimated`
+- `usage_source`
 - `estimated_cost_cents`
 - `budget_status`
+- `billing_currency`
+- `billing_period`
+- `tenant_budget_estimated_cents`
 
-这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`estimated_cost_cents` 当前按本地模型价格表与 usage 估算；真实租户账单仍需要 provider 原生 usage、币种与结算周期。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
+这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`usage_source=provider` 表示上游 SDK 已返回原生 usage，`usage_source=estimated` 表示运行时本地估算；`estimated_cost_cents` 当前按本地模型价格表与 usage 估算，`billing_currency` 固定为 `USD`，`billing_period` 固定为 `per_request`。真实租户账单仍需要 provider 原生账单、租户预算、币种和账期系统对接。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
 
 ## 4. 注意事项
 
