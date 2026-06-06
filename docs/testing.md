@@ -62,6 +62,8 @@
 # 快速目标化测试：默认跑 stream 链路，内置超时保护
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite auto
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite selector
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite external
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite rag
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_admin_prompt_revisions_return_safe_metadata,tests\test_runtime_api.py::test_admin_prompt_diff_compares_active_revision_with_target"
@@ -94,6 +96,9 @@ python -m compileall -q src tests
 - `agent`：受控多工具工作流测试。
 - `providers`：可选 provider、云厂商 speech provider 与 OpenAI prompt 组装测试。
 - `smoke`：插件、路由、回复后处理和限流主体等低成本冒烟测试。
+- `external`：外部 readiness 与线上 RAG 样本评估入口测试。
+- `selector`：快速测试选择器自身测试。
+- `full`：完整 `pytest tests`，用于显式回退验证。
 
 脚本默认使用 `.venv\Scripts\python.exe`，如果不存在则退回 `python`；默认超时为 120 秒，可用 `-TimeoutSeconds` 调整。若超时，脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr，便于定位卡住点。`auto` 只优化开发反馈速度，提交前仍需运行 `scripts/test.ps1`。
 
