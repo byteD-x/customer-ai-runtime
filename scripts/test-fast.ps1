@@ -28,8 +28,9 @@ function Resolve-PytestArgs {
     )
 
     $pytestArgs = @("-m", "pytest")
-    if ($ExplicitTargets.Count -gt 0) {
-        $pytestArgs += $ExplicitTargets
+    $normalizedTargets = @(Resolve-ExplicitTargets -ExplicitTargets $ExplicitTargets)
+    if ($normalizedTargets.Count -gt 0) {
+        $pytestArgs += $normalizedTargets
     } elseif ($SuiteName -eq "auto") {
         $pytestArgs += Resolve-AutoTargets -Python $Python
     } else {
@@ -77,6 +78,23 @@ function Resolve-PytestArgs {
         $pytestArgs += "-q"
     }
     return $pytestArgs
+}
+
+function Resolve-ExplicitTargets {
+    param(
+        [string[]] $ExplicitTargets
+    )
+
+    $targets = @()
+    foreach ($target in $ExplicitTargets) {
+        foreach ($item in ($target -split ",")) {
+            $trimmed = $item.Trim()
+            if ($trimmed) {
+                $targets += $trimmed
+            }
+        }
+    }
+    return [string[]] $targets
 }
 
 function Resolve-AutoTargets {

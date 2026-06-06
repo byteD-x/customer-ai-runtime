@@ -64,6 +64,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite auto
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite rag
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_admin_prompt_revisions_return_safe_metadata,tests\test_runtime_api.py::test_admin_prompt_diff_compares_active_revision_with_target"
 # 完整本地质量门禁
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe -m pytest
