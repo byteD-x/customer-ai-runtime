@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("stream", "api", "rag", "agent", "providers", "smoke")]
+    [ValidateSet("auto", "stream", "api", "rag", "agent", "providers", "smoke")]
     [string] $Suite = "stream",
 
     [string[]] $Target = @(),
@@ -23,12 +23,15 @@ function Resolve-PytestArgs {
     param(
         [string] $SuiteName,
         [string[]] $ExplicitTargets,
-        [switch] $UseVerbose
+        [switch] $UseVerbose,
+        [string] $Python
     )
 
     $pytestArgs = @("-m", "pytest")
     if ($ExplicitTargets.Count -gt 0) {
         $pytestArgs += $ExplicitTargets
+    } elseif ($SuiteName -eq "auto") {
+        $pytestArgs += Resolve-AutoTargets -Python $Python
     } else {
         switch ($SuiteName) {
             "stream" {
@@ -74,6 +77,24 @@ function Resolve-PytestArgs {
         $pytestArgs += "-q"
     }
     return $pytestArgs
+}
+
+function Resolve-AutoTargets {
+    param(
+        [string] $Python
+    )
+
+    $selectorPath = Join-Path (Get-Location) "scripts\select_fast_tests.py"
+    $selectionJson = & $Python $selectorPath --json
+    if ($LASTEXITCODE -ne 0) {
+        throw "fast test auto selector failed with exit code $LASTEXITCODE"
+    }
+    $selection = $selectionJson | ConvertFrom-Json
+    $targets = @($selection.targets)
+    Write-Host "==> auto changed files: $(@($selection.changed_paths).Count)"
+    Write-Host "==> auto selected suites: $(@($selection.suites) -join ', ')"
+    Write-Host "==> auto reason: $($selection.reason)"
+    return [string[]] $targets
 }
 
 function Invoke-WithTimeout {
@@ -124,7 +145,8 @@ $python = Resolve-Python
 $pytestArgs = Resolve-PytestArgs `
     -SuiteName $Suite `
     -ExplicitTargets $Target `
-    -UseVerbose:$VerbosePytest
+    -UseVerbose:$VerbosePytest `
+    -Python $python
 
 Write-Host "==> fast test suite: $Suite"
 Write-Host "==> timeout: ${TimeoutSeconds}s"

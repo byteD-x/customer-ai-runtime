@@ -236,6 +236,9 @@ runtime.register_plugin(MyAuthBridgePlugin())
 # 快速目标化测试：默认跑文本知识问答 + 流式 Chat 正常/错误事件，内置超时保护
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 
+# 根据当前 git status 自动选择最小 pytest 目标；无法识别时回退完整 pytest
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite auto
+
 # 本地质量门禁：ruff、format check、compileall、mypy、pytest
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
@@ -326,7 +329,8 @@ runtime.register_plugin(OrderStatusTool())
 # 开发中快速验证当前切片，默认 stream suite
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 
-# 按预设场景快速回归：stream / api / rag / agent / providers / smoke
+# 按预设场景快速回归：auto / stream / api / rag / agent / providers / smoke
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite auto
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite providers
 
 # 直接跑某个 pytest node，脚本会自动使用 .venv Python 并设置超时
@@ -339,7 +343,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe -m pytest --cov=src/customer_ai_runtime --cov-report=html
 ```
 
-`scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
+`scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。`-Suite auto` 会基于当前 `git status` 自动选择最小 pytest 目标，包括未跟踪的新文件；无法安全归类的运行时代码、依赖、CI 或门禁脚本变更会回退到完整 `pytest tests`。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
 
 ## 行业支持
 
