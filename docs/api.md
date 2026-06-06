@@ -372,7 +372,7 @@
 
 ### `GET /api/v1/admin/metrics/summary`
 
-- 用途：返回指标计数、按路由聚合的统计、会话摘要、满意度摘要和诊断摘要
+- 用途：返回指标计数、按路由聚合的统计、会话摘要、满意度摘要、诊断摘要和响应缓存摘要
 - 可选查询参数：
   - `tenant_id`
 - 返回重点：
@@ -380,6 +380,7 @@
   - `resolution_summary`
   - `feedback_summary`
   - `response_time_summary`
+  - `response_cache_summary`：单实例内存响应缓存运行时统计，包含 `enabled`、`ttl_seconds`、`size`、`hits`、`misses`、`writes`、`expired`、`clears`
 
 ### `GET /api/v1/admin/costs/summary`
 

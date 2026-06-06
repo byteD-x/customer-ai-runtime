@@ -329,7 +329,7 @@
 
 - Chat 响应字段：`usage`、`cache_hit`、`estimated_cost_cents`、`budget_status`、`usage_source`、`billing_currency`、`billing_period`、`tenant_budget_estimated_cents`
 - 诊断事件：`chat.cost_recorded`，包含 provider、model、route、usage、usage 来源、币种、账期、本地预算阈值和估算成本
-- 管理端聚合：`GET /api/v1/admin/costs/summary`，按 provider / route 汇总 token、估算成本、缓存命中、provider usage 记录数、usage 来源、币种和账期
+- 管理端聚合：`GET /api/v1/admin/costs/summary`，按 provider / route 汇总 token、估算成本、缓存命中、provider usage 记录数、usage 来源、币种和账期；`GET /api/v1/admin/metrics/summary` 输出单实例 `response_cache_summary`
 
 ### 设计取舍
 
@@ -361,6 +361,7 @@
 - `resolution_summary`
 - `feedback_summary`
 - `response_time_summary`
+- `response_cache_summary`
 - `cost_summary`
 - `handoff_queue`
 

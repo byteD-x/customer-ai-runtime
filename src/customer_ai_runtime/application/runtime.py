@@ -54,6 +54,7 @@ class RuntimeConfigService:
         self._prompt_history: list[PromptTemplateRecord] = []
         self._plugin_states: dict[str, bool] = {}
         self._response_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._response_cache_stats: Counter[str] = Counter()
         self._load()
         if not self._prompt_history:
             self._append_prompt_version("initial prompts", flush=False)
@@ -102,21 +103,26 @@ class RuntimeConfigService:
             not self._policies.response_cache_enabled
             or self._policies.response_cache_ttl_seconds <= 0
         ):
-            self._response_cache.clear()
+            self._clear_response_cache()
         self._flush()
         return self.get_policies()
 
     def get_cached_response(self, cache_key: str) -> dict[str, Any] | None:
         policies = self._policies
         if not policies.response_cache_enabled or policies.response_cache_ttl_seconds <= 0:
+            self._response_cache_stats["misses"] += 1
             return None
         cached = self._response_cache.get(cache_key)
         if cached is None:
+            self._response_cache_stats["misses"] += 1
             return None
         created_at, payload = cached
         if time() - created_at > policies.response_cache_ttl_seconds:
             self._response_cache.pop(cache_key, None)
+            self._response_cache_stats["misses"] += 1
+            self._response_cache_stats["expired"] += 1
             return None
+        self._response_cache_stats["hits"] += 1
         return json.loads(json.dumps(payload))
 
     def set_cached_response(self, cache_key: str, payload: dict[str, Any]) -> None:
@@ -124,6 +130,20 @@ class RuntimeConfigService:
         if not policies.response_cache_enabled or policies.response_cache_ttl_seconds <= 0:
             return
         self._response_cache[cache_key] = (time(), json.loads(json.dumps(payload)))
+        self._response_cache_stats["writes"] += 1
+
+    def get_response_cache_summary(self) -> dict[str, Any]:
+        policies = self._policies
+        return {
+            "enabled": policies.response_cache_enabled and policies.response_cache_ttl_seconds > 0,
+            "ttl_seconds": policies.response_cache_ttl_seconds,
+            "size": len(self._response_cache),
+            "hits": self._response_cache_stats["hits"],
+            "misses": self._response_cache_stats["misses"],
+            "writes": self._response_cache_stats["writes"],
+            "expired": self._response_cache_stats["expired"],
+            "clears": self._response_cache_stats["clears"],
+        }
 
     def get_plugin_states(self) -> dict[str, bool]:
         return dict(self._plugin_states)
@@ -174,6 +194,11 @@ class RuntimeConfigService:
             self._plugin_states = {
                 str(key): bool(value) for key, value in payload["plugin_states"].items()
             }
+
+    def _clear_response_cache(self) -> None:
+        if self._response_cache:
+            self._response_cache.clear()
+            self._response_cache_stats["clears"] += 1
 
     def _flush(self) -> None:
         if not self._storage_path:

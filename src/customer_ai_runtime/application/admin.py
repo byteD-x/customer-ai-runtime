@@ -308,6 +308,7 @@ class AdminService:
                 "warning": level_counts.get("warning", 0),
                 "error": level_counts.get("error", 0),
             },
+            "response_cache_summary": self.runtime_config.get_response_cache_summary(),
         }
 
     def get_runtime_config(self) -> dict[str, Any]:

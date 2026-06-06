@@ -1036,6 +1036,39 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert "business" in cost_data["by_route"]
     assert cost_data["by_provider"]["local"]["estimated_usage_records"] >= 3
 
+    metrics_summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert metrics_summary.status_code == 200
+    cache_summary = metrics_summary.json()["data"]["response_cache_summary"]
+    assert cache_summary["enabled"] is True
+    assert cache_summary["ttl_seconds"] == 300
+    assert cache_summary["size"] >= 1
+    assert cache_summary["hits"] >= 1
+    assert cache_summary["misses"] >= 1
+    assert cache_summary["writes"] >= 1
+    assert cache_summary["expired"] == 0
+    assert cache_summary["clears"] == 0
+
+    disabled = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={"response_cache_enabled": False},
+    )
+    assert disabled.status_code == 200
+    disabled_summary = client.get(
+        "/api/v1/admin/metrics/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert disabled_summary.status_code == 200
+    disabled_cache_summary = disabled_summary.json()["data"]["response_cache_summary"]
+    assert disabled_cache_summary["enabled"] is False
+    assert disabled_cache_summary["size"] == 0
+    assert disabled_cache_summary["clears"] >= 1
+
 
 def test_chat_cost_uses_configured_model_price_map(
     tmp_path: Path,
