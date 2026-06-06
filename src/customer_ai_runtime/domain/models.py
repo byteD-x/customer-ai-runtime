@@ -137,6 +137,10 @@ class Citation(BaseModel):
     chunk_id: str
     score: float
     excerpt: str
+    source: str | None = None
+    source_url: str | None = None
+    page: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class KnowledgeBase(BaseModel):
@@ -206,6 +210,10 @@ class KnowledgeChunk(BaseModel):
     content: str
     position: int
     embedding: list[float] = Field(default_factory=list)
+    source: str | None = None
+    source_url: str | None = None
+    page: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)
 
 

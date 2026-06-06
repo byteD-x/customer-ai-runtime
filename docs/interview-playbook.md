@@ -38,7 +38,8 @@
 
 - 新增 8 个本地标注 eval cases，评估 route 是否正确、citation 是否包含期望关键词、citation score 是否达到有效命中阈值。
 - eval payload 支持多知识库播种，当前覆盖 `kb_support` 和 `kb_saas`，包含行业术语和反馈回放样例。
-- eval payload 带 `dataset_id`、`cohort`、`review_status` 和 `label`，汇总输出 `reviewed_case_count`、`offline_accuracy` 与 `cohort_breakdown`。
+- eval payload 带 `dataset_id`、`cohort`、`review_status` 和 `label`，汇总输出 `reviewed_case_count`、`offline_accuracy`、`citation_accuracy`、`refusal_accuracy`、`faithfulness_score` 与 `cohort_breakdown`。
+- Chat 知识回复会输出引用来源字段，并在无有效引用时返回 `refusal=true` 和 `hallucination_check`，避免无证据强答。
 - `low_score_miss` 用例用于证明“低分不算有效命中”，避免把兜底引用包装成准确命中。
 - 失败明细包含 missing keywords、route mismatch、effective hit mismatch，可直接指导补文档、调切片或调阈值。
 
@@ -59,7 +60,7 @@
 **面试官可能追问**
 
 - 问：为什么不直接说准确率多少？
-- 答：当前仓库没有线上标注集和真实流量，只能给可复现的本地标注样例结果；`offline_accuracy` 只表示这些本地 labeled cases 的通过率。线上准确率必须基于业务标注集、灰度数据和人工复核，不能凭 demo case 虚构。
+- 答：当前仓库没有全量线上标注集和真实灰度流量，只能给可复现的本地标注样例结果；`offline_accuracy` 只表示这些本地 labeled cases 的通过率，`online_accuracy` 只表示手动导入的脱敏样本。线上准确率必须基于业务标注集、灰度数据和人工复核，不能凭 demo case 虚构。
 
 - 问：评测失败后怎么优化？
 - 答：先看失败类型：route 错就调整路由策略或上下文信号；citation keyword 缺失就补知识、改切片；effective hit 低就调 embedding、召回 top_k、min_score 或切片参数。
@@ -70,7 +71,7 @@
 
 - Session 增加 handoff reason、skill group、priority、enqueued_at、assigned_operator_id。
 - `handoff_package` 增加情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号，便于人工客服接手。
-- 队列按风险优先级倒序、同优先级按入队时间排序；支持 `skill_group` 过滤和 `claim-next`，返回 `queue_backend=local` 与单进程 `atomic_claim=true` 口径。
+- 队列按风险优先级倒序、同优先级按入队时间排序；支持 `skill_group` 过滤和 `claim-next`，返回 `queue_backend=local`、单进程 `atomic_claim=true` 与 `consistency_scope=single_process` 口径。
 - 风险类关键词会进入 `risk` 技能组，认领后状态从 `waiting_human` 变为 `human_in_service`。
 
 **代码证据**
@@ -90,7 +91,7 @@
 **面试官可能追问**
 
 - 问：多实例下怎么保证 claim-next 不重复？
-- 答：当前是单实例本地可验证实现；`atomic_claim=true` 只表示 local 后端在单进程锁内认领。多实例 future target 是 Redis sorted set 或数据库行级锁，按 priority/enqueued_at 排序并用原子 pop/事务认领。
+- 答：当前是单实例本地可验证实现；`atomic_claim=true` 只表示 local 后端在单进程锁内认领，`consistency_scope=single_process` 明确一致性边界。多实例 future target 是 Redis sorted set 或数据库行级锁，按 priority/enqueued_at 排序并用原子 pop/事务认领。
 
 ## 4. 演示闭环：现场怎么讲？
 
@@ -101,17 +102,22 @@
 3. 业务查询：输出 `route=business` 和 `tool_result`，证明实时工具链路不走缓存。
 4. 风险问题：输出 `handoff_package`，进入 `handoff_queue`，再 `claim-next`。
 5. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期和按 route 聚合。
-6. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态和 `offline_accuracy`。
-7. 外部 readiness：展示未配置外部凭据时 `overall_status=skipped`，强调不冒充真实联调通过。
+6. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、拒答准确率、faithfulness 分数和 `offline_accuracy`。
+7. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
+8. 外部 readiness：展示未配置外部凭据时 `overall_status=skipped`，强调不冒充真实联调通过。
+9. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
 
 **验证命令**
 
 ```powershell
 .venv\Scripts\python.exe examples\interview_demo.py
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
+# 可选：需要本机安装 k6 且服务已启动
+k6 run deploy\k6-smoke.js
 ```
 
-当前本地实测基线以本节验证命令输出为准；该结果只代表当前本地样例和外部依赖配置就绪态，不代表线上准确率、真实成本节省、生产 SLA 或外部 provider 联调结果。
+当前本地实测基线以本节验证命令输出为准；该结果只代表当前本地样例、输入样本和外部依赖配置就绪态，不代表线上准确率、真实成本节省、生产 SLA 或外部 provider 联调结果。
 
 ## 5. Prompt 版本与回滚：如何降低提示词改坏的风险？
 
@@ -138,7 +144,7 @@
 **可讲亮点**
 
 - 工具流使用显式 `steps`、`allowed_tools` 和 `max_steps`，只允许调用白名单工具，避免模型自由规划导致越权或循环调用。
-- 每一步保留输入、输出、失败状态和降级策略，适合面试演示“订单状态 -> 物流轨迹 -> 售后建议”这类确定性链路。
+- 每一步保留 plan、phase、observation、失败状态和最终摘要，适合面试演示“订单状态 -> 物流轨迹 -> 售后建议”这类确定性链路。
 - HTTP API 为 `POST /api/v1/agents/tool-workflow`，仅 `admin` / `operator` 可调用；服务围绕顺序执行、禁用工具拦截和失败停止设计。
 
 **代码证据**
@@ -177,7 +183,7 @@
 - eval case 同时检查 route、引用关键词和 citation score，并覆盖多知识库、行业术语、反馈回放和低分未命中。
 - case 带本地标注集元数据、cohort 和人工复核状态，汇总输出 `offline_accuracy` 与 cohort breakdown。
 - `expect_effective_hit=false` 用于验证低分未命中。
-- 失败明细暴露 `missing_keywords`、`route_ok`、`effective_hit_ok`。
+- 失败明细暴露 `missing_keywords`、`route_ok`、`effective_hit_ok`、`citation_accuracy`、`refusal_ok` 和 `faithfulness_score`。
 
 **可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、标注样例字段、人工复核计数和 `offline_accuracy`。
 
@@ -203,7 +209,7 @@
 - 演示默认使用本地 LLM / Vector / Business provider。
 - 脚本使用临时 storage，不污染本地状态。
 - 输出稳定字段，便于面试时按字段讲架构。
-- 外部 readiness 脚本独立检查 OpenAI / Qdrant / 业务 API / 客服工单 API；缺少配置时返回 `skipped`，不误报联调通过。
+- 外部 readiness 脚本独立检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖；缺少配置时返回 `skipped`，不误报联调通过。
 
 **可验证结果**：`.venv\Scripts\python.exe examples\interview_demo.py` 退出码为 0，输出关键段落；`.venv\Scripts\python.exe scripts\check_external_readiness.py --json` 在未配置外部凭据时输出 `skipped`。
 
@@ -220,7 +226,7 @@
 
 - **S**：RAG demo 容易只展示成功样例，无法解释引用缺失和低分召回。
 - **T**：建立本地可复现 eval，证明评测机制而非虚构准确率。
-- **A**：设计 8 个带 dataset、cohort、review_status 和 label 的 eval cases，检查 route、引用关键词、有效命中阈值，输出失败明细，并覆盖多知识库与反馈回放。
+- **A**：设计 8 个带 dataset、cohort、review_status 和 label 的 eval cases，检查 route、引用关键词、有效命中阈值、拒答期望和 faithfulness 分数，输出失败明细，并覆盖多知识库与反馈回放。
 - **R**：`scripts/eval_rag.py` 可本地复跑，当前本地标注样例通过；线上准确率需业务标注集。
 
 ### STAR：人工接管队列
@@ -240,7 +246,7 @@
 ## 9. 边界与 future target
 
 - 当前本地 JSON 存储适合开发、演示和单实例部署；多实例强一致不是当前事实。
-- 当前 RAG eval 是本地标注样例，不代表线上准确率。
+- 当前 RAG eval 是本地标注样例，online eval 只代表导入的脱敏样本，不代表全量线上准确率。
 - 当前成本支持本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值；真实账单仍需要接模型供应商 usage、币种、租户预算和结算周期。
-- 当前 `queue_backend=local`、`atomic_claim=true` 只代表单进程锁内认领，不代表多实例强一致队列。
-- Redis queue、Postgres repository、真实客服工单系统、Qdrant/OpenAI 联调均可作为下一阶段扩展，不写成已完成能力。
+- 当前 `queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 只代表单进程锁内认领边界，不代表多实例强一致队列。
+- Redis queue、Postgres repository、真实客服工单系统、Qdrant/OpenAI 端到端联调和生产压测均可作为下一阶段扩展，不写成已完成能力。

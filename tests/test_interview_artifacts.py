@@ -39,9 +39,11 @@ def test_rag_eval_reports_citation_keyword_failures() -> None:
     assert report["summary"]["labeled_case_count"] == 1
     assert report["summary"]["reviewed_case_count"] == 0
     assert report["summary"]["offline_accuracy"] == 0.0
+    assert report["summary"]["citation_accuracy"] == 0.0
     assert report["failures"][0]["missing_keywords"] == ["seven day no reason refund"]
     assert report["failures"][0]["route_ok"] is True
     assert report["failures"][0]["effective_hit_ok"] is True
+    assert report["failures"][0]["citation_accuracy"] == 0.0
 
 
 def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
@@ -88,13 +90,9 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
             {
                 "case_id": "business_unrelated_miss",
                 "route": "knowledge",
-                "citations": [
-                    {
-                        "title": "refund policy",
-                        "excerpt": "Refund policy supports seven day no reason refund.",
-                        "score": 0.12,
-                    }
-                ],
+                "citations": [],
+                "refusal": True,
+                "refusal_reason": "no_effective_citation",
             },
             {
                 "case_id": "saas_scim_sync_hit",
@@ -130,12 +128,18 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
     assert report["summary"]["labeled_case_count"] == 4
     assert report["summary"]["reviewed_case_count"] == 4
     assert report["summary"]["offline_accuracy"] == 1.0
+    assert report["summary"]["citation_accuracy"] == 1.0
+    assert report["summary"]["refusal_accuracy"] == 1.0
+    assert report["summary"]["refusal_case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["support_baseline"]["case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["negative_control"]["case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["saas_baseline"]["case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["feedback_replay"]["case_count"] == 1
     assert unrelated_case["effective_hit"] is False
     assert unrelated_case["effective_hit_ok"] is True
+    assert unrelated_case["expected_refusal"] is True
+    assert unrelated_case["actual_refusal"] is True
+    assert unrelated_case["refusal_ok"] is True
     assert unrelated_case["dataset_id"] == "local_interview_v1"
     assert unrelated_case["cohort"] == "negative_control"
     assert unrelated_case["review_status"] == "reviewed"
@@ -167,11 +171,16 @@ def test_external_readiness_skips_missing_optional_credentials() -> None:
     report = run_checks(env={}, timeout_seconds=0.1)
 
     assert report["overall_status"] == "skipped"
-    assert report["status_counts"] == {"skipped": 4}
+    assert report["status_counts"] == {"skipped": 9}
     assert {check["name"] for check in report["checks"]} == {
-        "openai",
-        "qdrant",
+        "openai_models",
+        "openai_admin_usage",
+        "openai_admin_costs",
+        "qdrant_health",
+        "qdrant_collections",
         "business_api",
         "ticket_api",
+        "redis_queue",
+        "postgres_queue",
     }
     assert all(check["status"] == "skipped" for check in report["checks"])

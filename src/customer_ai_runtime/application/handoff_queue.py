@@ -10,6 +10,7 @@ from customer_ai_runtime.domain.models import Session
 class HandoffQueueBackend(Protocol):
     name: str
     atomic_claim: bool
+    consistency_scope: str
 
     def list_waiting(
         self,
@@ -28,6 +29,7 @@ class HandoffQueueBackend(Protocol):
 class LocalHandoffQueueBackend:
     name = "local"
     atomic_claim = True
+    consistency_scope = "single_process"
 
     def __init__(self, session_service: SessionService) -> None:
         self._session_service = session_service

@@ -1044,6 +1044,8 @@ class ConfidenceHandoffPlugin(HumanHandoffPlugin):
         self._runtime_config = runtime_config
 
     async def evaluate(self, context: PluginContext) -> HandoffDecision:
+        if context.response.get("refusal") and context.response.get("refusal_reason"):
+            return HandoffDecision()
         threshold = self._runtime_config.get_policies().handoff_confidence_threshold
         confidence = float(context.response.get("confidence", 0.0))
         if confidence < threshold:

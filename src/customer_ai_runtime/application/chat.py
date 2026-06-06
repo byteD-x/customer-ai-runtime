@@ -12,6 +12,7 @@ from customer_ai_runtime.application.business import (
 )
 from customer_ai_runtime.application.handoff import HandoffService
 from customer_ai_runtime.application.knowledge import KnowledgeService
+from customer_ai_runtime.application.rag_quality import HallucinationCheckService
 from customer_ai_runtime.application.routing import RoutingService
 from customer_ai_runtime.application.runtime import (
     DiagnosticsService,
@@ -52,6 +53,7 @@ class ChatService:
         default_input_cost_per_1k_cents: float = 0.1,
         default_output_cost_per_1k_cents: float = 0.1,
         llm_model_name: str | None = None,
+        hallucination_checker: HallucinationCheckService | None = None,
     ) -> None:
         self.session_service = session_service
         self.knowledge_service = knowledge_service
@@ -69,6 +71,7 @@ class ChatService:
         self.default_input_cost_per_1k_cents = default_input_cost_per_1k_cents
         self.default_output_cost_per_1k_cents = default_output_cost_per_1k_cents
         self.llm_model_name = llm_model_name
+        self.hallucination_checker = hallucination_checker or HallucinationCheckService()
 
     async def process_message(
         self,
@@ -123,16 +126,21 @@ class ChatService:
         tool_result: BusinessResult | None = None
         knowledge_version_id: str | None = None
         effective_hit_count = 0
+        retrieval_latency_ms: float | None = None
+        tool_latency_ms: float | None = None
+        llm_latency_ms: float | None = None
 
         if route_decision.route == RouteType.BUSINESS and route_decision.tool_name:
             parameters = self.routing_service.extract_tool_parameters(
                 route_decision.tool_name, message
             )
+            tool_started_at = perf_counter()
             tool_result = await self.tool_service.execute(
                 business_context=business_context,
                 tool_name=route_decision.tool_name,
                 parameters=parameters,
             )
+            tool_latency_ms = round((perf_counter() - tool_started_at) * 1000, 3)
             self.diagnostics.record(
                 DiagnosticLevel.INFO,
                 "chat.tool_executed",
@@ -142,6 +150,7 @@ class ChatService:
                     "session_id": session.session_id,
                     "tool_name": route_decision.tool_name,
                     "status": tool_result.status,
+                    "latency_ms": tool_latency_ms,
                 },
             )
         elif route_decision.route == RouteType.KNOWLEDGE:
@@ -151,12 +160,14 @@ class ChatService:
                 explicit=knowledge_base_id,
             )
             if knowledge_base_id:
+                retrieval_started_at = perf_counter()
                 citations = await self.knowledge_service.retrieve(
                     tenant_id=tenant_id,
                     knowledge_base_id=knowledge_base_id,
                     query=message,
                     top_k=policies.knowledge_top_k,
                 )
+                retrieval_latency_ms = round((perf_counter() - retrieval_started_at) * 1000, 3)
                 knowledge_version_id = citations[0].version_id if citations else None
                 filtered_citations = [
                     citation
@@ -178,6 +189,7 @@ class ChatService:
                             "knowledge_version_id": knowledge_version_id,
                             "query": message,
                             "top_score": top_score,
+                            "latency_ms": retrieval_latency_ms,
                         },
                     )
                 citations = filtered_citations or citations[:1]
@@ -196,6 +208,7 @@ class ChatService:
                         "returned_hit_count": len(citations),
                         "effective_hit_count": effective_hit_count,
                         "effective_hit": effective_hit_count > 0,
+                        "latency_ms": retrieval_latency_ms,
                     },
                 )
 
@@ -204,6 +217,13 @@ class ChatService:
             prompt_template = prompts.knowledge_answer
         elif route_decision.route == RouteType.BUSINESS:
             prompt_template = prompts.business_answer
+        selected_model = self._select_model(route_decision.route, message)
+        model_route = {
+            "strategy": "static_route",
+            "route": route_decision.route.value,
+            "selected_model": selected_model,
+            "provider": self.runtime_config_provider_name(),
+        }
 
         cache_key = self._build_response_cache_key(
             tenant_id=tenant_id,
@@ -211,6 +231,7 @@ class ChatService:
             route=route_decision.route,
             knowledge_base_id=knowledge_base_id,
             knowledge_version_id=knowledge_version_id,
+            selected_model=selected_model,
             prompt_template=prompt_template,
             citations=[citation.model_dump(mode="json") for citation in citations],
             host_auth_context=host_auth_context,
@@ -228,8 +249,16 @@ class ChatService:
             )
             response_payload["cache_hit"] = True
             response_payload["usage"] = LLMUsage().model_dump(mode="json")
+            response_payload["latency_ms"] = self._latency_payload(
+                retrieval_latency_ms=retrieval_latency_ms,
+                tool_latency_ms=tool_latency_ms,
+                llm_latency_ms=0.0,
+            )
+            response_payload["model_route"] = model_route
+            response_payload["selected_model"] = selected_model
             self.metrics.increment("llm_cache_hits")
         else:
+            llm_started_at = perf_counter()
             llm_response = await self.llm_provider.generate(
                 LLMRequest(
                     tenant_id=tenant_id,
@@ -241,8 +270,10 @@ class ChatService:
                     tool_result=tool_result,
                     prompt_template=prompt_template,
                     business_context=business_context.model_dump(mode="json"),
+                    model=selected_model,
                 )
             )
+            llm_latency_ms = round((perf_counter() - llm_started_at) * 1000, 3)
             usage = llm_response.usage or self._estimate_usage(
                 prompt_template,
                 message,
@@ -281,7 +312,48 @@ class ChatService:
                 },
                 "cache_hit": False,
                 "usage": usage.model_dump(mode="json"),
+                "latency_ms": self._latency_payload(
+                    retrieval_latency_ms=retrieval_latency_ms,
+                    tool_latency_ms=tool_latency_ms,
+                    llm_latency_ms=llm_latency_ms,
+                ),
+                "model_route": model_route,
+                "selected_model": selected_model,
             }
+            if route_decision.route == RouteType.KNOWLEDGE:
+                hallucination_check = self.hallucination_checker.check(
+                    answer=llm_response.answer,
+                    citations=llm_response.citations,
+                    effective_hit_count=effective_hit_count,
+                )
+                response_payload["hallucination_check"] = hallucination_check.model_dump(
+                    mode="json"
+                )
+                if hallucination_check.refusal:
+                    response_payload["answer"] = self.hallucination_checker.refusal_answer()
+                    response_payload["confidence"] = min(response_payload["confidence"], 0.35)
+                    response_payload["citations"] = []
+                    response_payload["refusal"] = True
+                    response_payload["refusal_reason"] = hallucination_check.reason
+                    self.diagnostics.record(
+                        DiagnosticLevel.WARNING,
+                        "rag.hallucination_check_failed",
+                        "knowledge answer blocked by evidence gate",
+                        {
+                            "tenant_id": tenant_id,
+                            "session_id": session.session_id,
+                            "knowledge_base_id": knowledge_base_id,
+                            "knowledge_version_id": knowledge_version_id,
+                            "reason": hallucination_check.reason,
+                            "faithfulness_score": hallucination_check.faithfulness_score,
+                            "citation_count": hallucination_check.citation_count,
+                            "effective_citation_count": (
+                                hallucination_check.effective_citation_count
+                            ),
+                        },
+                    )
+                else:
+                    response_payload["refusal"] = False
 
             should_handoff, handoff_reason = await self.handoff_service.should_handoff(
                 business_context=business_context,
@@ -326,6 +398,7 @@ class ChatService:
                 cache_key is not None
                 and route_decision.route == RouteType.KNOWLEDGE
                 and response_payload.get("handoff") is None
+                and not response_payload.get("refusal")
             ):
                 self.runtime_config.set_cached_response(cache_key, response_payload)
 
@@ -335,7 +408,7 @@ class ChatService:
         estimated_cost_cents = self._estimated_cost_cents(
             usage,
             provider=provider,
-            model=self.llm_model_name,
+            model=selected_model,
         )
         budget_status = (
             "alert" if estimated_cost_cents >= policies.cost_alert_estimated_cents else "ok"
@@ -357,6 +430,7 @@ class ChatService:
             provider=provider,
             usage=usage,
             cache_hit=cache_hit,
+            model=selected_model,
             estimated_cost_cents=estimated_cost_cents,
             budget_status=budget_status,
             usage_source=usage_source,
@@ -383,6 +457,7 @@ class ChatService:
                 "cache_hit": cache_hit,
                 "estimated_cost_cents": estimated_cost_cents,
                 "usage_source": usage_source,
+                "selected_model": selected_model,
             },
         )
         duration_ms: int | None = None
@@ -404,6 +479,8 @@ class ChatService:
                 "industry": business_context.industry,
                 "channel": channel,
                 "duration_ms": duration_ms,
+                "model": selected_model,
+                "latency_ms": response_payload.get("latency_ms"),
             },
         )
         response_payload.pop("requires_handoff", None)
@@ -418,6 +495,7 @@ class ChatService:
         route: RouteType,
         knowledge_base_id: str | None,
         knowledge_version_id: str | None,
+        selected_model: str | None,
         prompt_template: str,
         citations: list[dict[str, Any]],
         host_auth_context: HostAuthContext | None,
@@ -438,11 +516,28 @@ class ChatService:
             "query": " ".join(message.lower().split()),
             "knowledge_base_id": knowledge_base_id,
             "knowledge_version_id": knowledge_version_id,
+            "selected_model": selected_model,
             "prompt_hash": hashlib.sha256(prompt_template.encode("utf-8")).hexdigest()[:12],
             "citations": citation_keys,
         }
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    def _select_model(self, route: RouteType, message: str) -> str | None:
+        return self.llm_model_name
+
+    def _latency_payload(
+        self,
+        *,
+        retrieval_latency_ms: float | None,
+        tool_latency_ms: float | None,
+        llm_latency_ms: float | None,
+    ) -> dict[str, float | None]:
+        return {
+            "retrieval_ms": retrieval_latency_ms,
+            "tool_ms": tool_latency_ms,
+            "llm_ms": llm_latency_ms,
+        }
 
     def _estimate_usage(self, *texts: str) -> LLMUsage:
         input_tokens = max(1, sum(max(1, len(text or "") // 2) for text in texts if text))
@@ -497,6 +592,7 @@ class ChatService:
         provider: str,
         usage: LLMUsage,
         cache_hit: bool,
+        model: str | None,
         estimated_cost_cents: float,
         budget_status: str,
         usage_source: str,
@@ -512,7 +608,7 @@ class ChatService:
                 "tenant_id": tenant_id,
                 "session_id": session_id,
                 "provider": provider,
-                "model": self.llm_model_name,
+                "model": model,
                 "route": route.value,
                 "channel": channel,
                 "cache_hit": cache_hit,

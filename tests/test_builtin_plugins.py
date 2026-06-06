@@ -52,6 +52,12 @@ def test_tool_catalog_exposes_management_metadata() -> None:
     assert order_tool["available"] is True
     assert order_tool["industry_scopes"] == ["ecommerce"]
     assert order_tool["capabilities"] == ["order_status"]
+    assert order_tool["input_schema"]["type"] == "object"
+    assert order_tool["input_schema"]["required"] == ["order_id"]
+    assert order_tool["input_schema"]["properties"]["order_id"] == {"type": "string"}
+    assert order_tool["output_schema"]["required"] == ["tool_name", "status", "summary"]
+    assert order_tool["timeout_ms"] == 8000
+    assert order_tool["retry_policy"]["max_attempts"] == 1
     assert any(item["category"] == "ecommerce" for item in categories)
 
 

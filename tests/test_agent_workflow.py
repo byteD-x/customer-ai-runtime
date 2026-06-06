@@ -40,8 +40,13 @@ async def test_agent_workflow_runs_two_successful_steps() -> None:
     assert [item.tool_name for item in result.trace] == ["order_status", "logistics_tracking"]
     assert [item.step_index for item in result.trace] == [0, 1]
     assert [item.status for item in result.trace] == ["success", "success"]
+    assert [item.phase for item in result.trace] == ["execute", "execute"]
     assert all(item.error is None for item in result.trace)
     assert all(item.duration_ms >= 0 for item in result.trace)
+    assert result.plan == ["order_status", "logistics_tracking"]
+    assert result.state == "final"
+    assert result.final_answer == "demo-tenant:logistics_tracking"
+    assert result.trace[0].observation["data"] == {}
 
 
 @pytest.mark.anyio
@@ -112,5 +117,9 @@ async def test_agent_workflow_stops_after_first_business_failure() -> None:
     assert result.trace[0].step_index == 0
     assert result.trace[0].tool_name == "order_status"
     assert result.trace[0].status == "missing_parameter"
+    assert result.trace[0].observation["data"] == {"error": "missing order_id"}
+    assert result.plan == ["order_status", "logistics_tracking"]
+    assert result.state == "repair_required"
+    assert result.final_answer == result.trace[0].summary
     assert result.trace[0].summary == "缺少 order_id"
     assert result.trace[0].error == "缺少 order_id"

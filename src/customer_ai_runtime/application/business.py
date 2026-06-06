@@ -319,14 +319,20 @@ class ResponseEnhancementOrchestrator:
         for item in citations:
             if not isinstance(item, dict):
                 continue
-            references.append(
-                {
-                    "title": item.get("title", ""),
-                    "knowledge_base_id": item.get("knowledge_base_id"),
-                    "document_id": item.get("document_id"),
-                    "score": item.get("score"),
-                }
-            )
+            reference = {
+                "title": item.get("title", ""),
+                "knowledge_base_id": item.get("knowledge_base_id"),
+                "document_id": item.get("document_id"),
+                "score": item.get("score"),
+            }
+            for key in ("version_id", "chunk_id", "source", "source_url", "page"):
+                value = item.get(key)
+                if value not in (None, ""):
+                    reference[key] = value
+            metadata = item.get("metadata")
+            if isinstance(metadata, dict) and metadata:
+                reference["metadata"] = metadata
+            references.append(reference)
         return references
 
     def _ensure_structured_output(

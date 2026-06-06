@@ -242,13 +242,16 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 # 外部联调 readiness：未配置凭据时返回 skipped，不宣称真实联调通过
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json
 
+# 可选：真实线上脱敏标注样本评估，需要传入 JSON/JSONL 导出文件
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
+
 # 面试演示：知识问答、缓存命中、业务工具、结构化交接包、转人工队列、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py
 # 可选：使用脚本封装演示命令
 powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
 ```
 
-当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。`check_external_readiness.py` 只检查可选外部依赖的配置与健康状态，未配置时返回 `skipped`；只有真实凭据、网络和外部系统可达时才能声明对应联调通过。上述结果只代表当前本地样例，不代表线上 RAG 准确率、真实成本节省、外部 provider 联调结果或生产 SLA。
+当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。`check_external_readiness.py` 会检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性，未配置时返回 `skipped`；只有真实凭据、网络和外部系统可达时才能声明对应联调通过。`eval_online_rag.py` 只基于你提供的脱敏线上标注样本计算 `online_accuracy`，没有样本时不代表线上准确率。上述结果只代表当前本地样例或输入样本，不代表真实成本节省、外部 provider 端到端联调结果或生产 SLA。
 
 ## 插件扩展
 

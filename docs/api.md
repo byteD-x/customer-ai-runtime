@@ -166,6 +166,9 @@
 - `intent`
 - `answer`
 - `citations`
+- `references`：由引用后处理生成的可展示引用列表，包含 `source` / `source_url` / `page` 等可选来源字段
+- `hallucination_check`：知识型回复的启发式证据门禁结果，包含 `faithfulness_score`、`citation_count`、`effective_citation_count` 等字段
+- `refusal` / `refusal_reason`：知识型回复缺少有效引用或证据重叠不足时返回，表示系统拒绝强答
 - `tool_result`
 - `handoff`
 - `host_auth_context`
@@ -263,7 +266,10 @@
   - `max_steps`：最大步骤数，防止无限循环
   - `allowed_tools`：允许调用的工具白名单
 - 返回重点：
-  - `trace`：每步包含 `step_index`、`tool_name`、`status`、`summary`、`error`、`duration_ms`
+  - `plan`：按顺序列出本次工作流计划执行的工具名
+  - `state`：`final` / `repair_required`
+  - `final_answer`：最后一个已执行工具的摘要；失败停止时为失败摘要
+  - `trace`：每步包含 `step_index`、`tool_name`、`phase`、`status`、`summary`、`error`、`observation`、`duration_ms`
 
 ## 8. 语音接口
 
@@ -396,6 +402,7 @@
   - `assigned_operator_id`
   - `queue_backend`：当前默认 `local`
   - `atomic_claim`：当前默认 `true`，表示单进程锁内认领，不代表多实例队列一致性
+  - `consistency_scope`：当前为 `single_process`，用于明确一致性边界
 
 ### `POST /api/v1/admin/handoff/claim-next`
 
@@ -624,6 +631,10 @@
 - `description`
 - `required_parameters`
 - `optional_parameters`
+- `input_schema`
+- `output_schema`
+- `timeout_ms`
+- `retry_policy`
 - `suggested_context_keys`
 - `plugin_id`
 - `version`

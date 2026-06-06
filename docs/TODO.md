@@ -15,12 +15,14 @@
 - 成本治理：LLM usage、usage 来源、币种、账期、本地预算阈值、可配置模型价格表、知识问答安全缓存、业务查询不缓存、成本摘要
 - LLM 接入治理：模型覆盖、结构化 schema、Prompt 版本历史与 prompt hash 缓存隔离
 - Prompt 回滚 API：指定 revision 回滚并生成新的激活版本记录
-- RAG eval：8 个本地标注 case、多知识库样例、标注集元数据、灰度 cohort、人工复核状态、离线准确率、失败明细、可复现脚本
+- RAG eval：8 个本地标注 case、多知识库样例、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用准确率、拒答准确率、faithfulness 分数、失败明细、可复现脚本
 - RAG 文件上传解析：文本 / Markdown 已可走上传入口，PDF / Word 依赖 `providers` extra
 - AgentWorkflow HTTP API：顺序工具步骤、工具白名单、步骤上限、失败停止与 trace
 - 结构化交接包：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号
-- 单实例人工接管队列：技能组、优先级、单进程原子 `claim-next`
-- 外部 readiness 脚本：OpenAI / Qdrant / 业务 API / 客服工单 API 未配置时返回 `skipped`
+- 单实例人工接管队列：技能组、优先级、单进程原子 `claim-next`，返回 `consistency_scope=single_process`
+- 外部 readiness 脚本：OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖未配置时返回 `skipped`
+- 线上 RAG 样本评估入口：`scripts/eval_online_rag.py` 读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`
+- k6 smoke 模板：`deploy/k6-smoke.js` 可对健康检查和管理端指标摘要做可复现压测入口
 - 本地质量门禁修复：`scripts/test.ps1` 串联静态检查、类型检查与测试
 - 面试演示与 STAR / 简历材料
 
@@ -32,7 +34,7 @@
 
 ### P1：生产化增强
 
-- **多实例人工队列**：将当前 Session 轻量队列迁移为 Redis sorted set 或数据库事务认领。
+- **多实例人工队列**：将当前 Session 轻量队列迁移为 Redis sorted set 原子 pop 或数据库事务认领。
 - **真实成本结算**：在当前本地模型价格表基础上，继续接入真实 provider usage、租户预算阈值、币种和账单结算。
 - **外部系统联调**：在 readiness 脚本基础上，补充真实 OpenAI / Qdrant / 业务 API / 客服工单系统的端到端联调记录。
 - **部署材料完善**：在现有 Docker Compose 基础上，继续细化环境变量模板、启动检查、Qdrant 联调和常见故障排查。
@@ -57,10 +59,13 @@
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe scripts\eval_rag.py --json
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
 .venv\Scripts\python.exe examples\interview_demo.py
+# 可选：需要本机安装 k6 且服务已启动
+k6 run deploy\k6-smoke.js
 ```
 
-本地 provider 会打印估算成本和 eval 结果；readiness 脚本在缺少外部配置时会返回 `skipped`。这些结果只代表当前本地样例和配置就绪态，不代表线上指标或真实外部联调通过。
+本地 provider 会打印估算成本和 eval 结果；readiness 脚本在缺少外部配置时会返回 `skipped`。这些结果只代表当前本地样例、输入样本和配置就绪态，不代表线上指标、生产压测结果或真实外部联调通过。
 
 ## 5. 维护规则
 

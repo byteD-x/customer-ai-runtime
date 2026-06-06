@@ -88,6 +88,9 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 
 - OpenAI
   `CUSTOMER_AI_OPENAI_API_KEY`
+  `CUSTOMER_AI_OPENAI_ADMIN_API_KEY`
+  `CUSTOMER_AI_OPENAI_ADMIN_USAGE_PATH`
+  `CUSTOMER_AI_OPENAI_ADMIN_COSTS_PATH`
 - 阿里云语音
   `CUSTOMER_AI_ALIYUN_ACCESS_KEY_ID`
   `CUSTOMER_AI_ALIYUN_ACCESS_KEY_SECRET`
@@ -104,6 +107,11 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 - 外部客服工单 API readiness 检查
   `CUSTOMER_AI_TICKET_API_BASE_URL`
   `CUSTOMER_AI_TICKET_API_KEY`
+- Redis/Postgres 队列依赖 readiness 检查
+  `CUSTOMER_AI_REDIS_HOST`
+  `CUSTOMER_AI_REDIS_PORT`
+  `CUSTOMER_AI_POSTGRES_HOST`
+  `CUSTOMER_AI_POSTGRES_PORT`
 
 ### 3.4 宿主桥接与认证
 
@@ -202,12 +210,15 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe scripts\eval_rag.py --json
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
 .venv\Scripts\python.exe examples\interview_demo.py
+# 可选：需要本机安装 k6 且服务已启动
+k6 run deploy\k6-smoke.js
 ```
 
 当前本地实测基线为：`scripts/test.ps1` 通过、RAG eval 8 cases passed、`examples/interview_demo.py` 跑通；`pytest` 数量以实际门禁输出为准。
 
-上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省、外部 provider 联调通过或生产压测结果。`scripts/check_external_readiness.py` 只检查可选外部依赖的配置与健康状态；未配置凭据时返回 `skipped`。
+上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省、外部 provider 联调通过或生产压测结果。`scripts/check_external_readiness.py` 只检查可选外部依赖的配置、可达性和部分权限探针；未配置凭据时返回 `skipped`。`deploy/k6-smoke.js` 是模板，只有保留真实 k6 输出后才能讨论 p95/p99、QPS 或 SLA。
 
 ## 7. 当前限制
 
@@ -218,7 +229,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 - 当前存储层仍以本地 JSON 仓储为主，更适合开发、演示和轻量部署
 - 当前人工接管队列基于本地 `Session` 状态排序，提供单进程原子认领；未提供多实例原子认领
 - 当前成本统计支持本地模型价格表估算和 provider usage 治理入口，未接入真实租户账单结算
-- 当前 RAG eval 为离线本地标注样例脚本，包含 cohort 与人工复核状态字段；未接入真实业务标注集、线上灰度流量和人工复核系统
+- 当前 RAG eval 为离线本地标注样例脚本，包含 cohort、人工复核状态、引用准确率、拒答准确率和 faithfulness 字段；online eval 只代表输入的脱敏样本，未接入真实业务标注集、线上灰度流量和人工复核系统
 
 ## 7.1 安全与保护性配置（当前实现）
 

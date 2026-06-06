@@ -12,7 +12,7 @@
 | RTC Service | 房间与通话状态机 | RTC 事件 | RTC 输出事件 |
 | Handoff Service | 转人工策略与交接包 | 会话、原因、策略 | `HandoffPackage` |
 | Cost Governance | LLM 用量、usage 来源、缓存命中与成本摘要 | Chat 响应、诊断事件 | `usage` / `cost_summary` |
-| RAG Evaluation | 离线 RAG 标注样例评测 | eval cases、chat results | `rag_eval_summary` |
+| RAG Evaluation | 离线 RAG 标注样例与脱敏线上样本评测 | eval cases、chat results | `rag_eval_summary` / `online_rag_eval_summary` |
 | Auth Service | API Key / Host Bridge 认证 | Header / Cookie / Token | `AuthContext` |
 | Plugin Registry | 插件注册、发现、启停、优先级 | 插件元数据 | 可执行插件集合 |
 | Business Context Builder | 合并宿主、页面、行为、会话上下文 | 请求与宿主上下文 | `BusinessContext` |
@@ -154,7 +154,10 @@
 - 当检索后没有有效引用时，写入 `knowledge.retrieve_miss` 诊断事件，供管理端聚合知识缺口
 - 当检索命中有效引用时，写入知识命中诊断与版本标记，用于后续知识库效果分析
 - 知识问答在无宿主敏感上下文、存在引用、知识版本和 prompt hash 受控时可进入安全缓存
-- `scripts/eval_rag.py` 通过本地可复现 API 链路评估 route、引用关键词、有效命中阈值、标注集元数据、cohort、人工复核状态、`offline_accuracy` 和失败明细
+- `RetrievalService` 负责对检索结果做轻量 rerank，并把 `source`、`source_url`、`page` 和 `metadata` 透传到 `Citation`
+- `HallucinationCheckService` 对知识型回复执行启发式证据门禁；缺少有效引用或证据重叠不足时返回拒答字段，避免无证据强答
+- `scripts/eval_rag.py` 通过本地可复现 API 链路评估 route、引用关键词、有效命中阈值、标注集元数据、cohort、人工复核状态、`citation_accuracy`、`refusal_accuracy`、`faithfulness_score`、`offline_accuracy` 和失败明细
+- `scripts/eval_online_rag.py` 读取脱敏 JSON/JSONL 样本，输出样本级 `online_accuracy`
 
 ## 6. 业务工具模块
 
@@ -347,6 +350,8 @@
 - Cost summary
 - Handoff queue
 - RAG eval scripts
+- External readiness scripts
+- k6 smoke template
 - Plugin 状态
 - Provider 健康状态
 
@@ -368,6 +373,6 @@
 
 - 当前交付以单体参考实现为主。
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
-- 当前人工接管队列是基于 `Session` 的单实例轻量队列；`queue_backend=local`、`atomic_claim=true` 仅表示单进程锁内认领，Redis sorted set / 数据库事务认领属于 future target。
-- 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态和 `offline_accuracy`，不代表线上准确率。
+- 当前人工接管队列是基于 `Session` 的单实例轻量队列；`queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 仅表示单进程锁内认领边界，Redis sorted set / 数据库事务认领属于 future target。
+- 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态、引用准确率、拒答准确率、faithfulness 分数和 `offline_accuracy`；online eval 只代表输入样本，不代表全量线上准确率。
 - 当前成本治理是本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值，不代表真实 provider 账单或线上节省比例。

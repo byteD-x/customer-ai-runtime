@@ -516,6 +516,10 @@ def citations_from_hits(hits: list[RetrievalHit]) -> list[Citation]:
             chunk_id=hit.chunk.chunk_id,
             score=round(hit.score, 4),
             excerpt=hit.chunk.content,
+            source=hit.chunk.source,
+            source_url=hit.chunk.source_url,
+            page=hit.chunk.page,
+            metadata=dict(hit.chunk.metadata),
         )
         for hit in hits
     ]

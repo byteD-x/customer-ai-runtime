@@ -15,6 +15,10 @@ def evaluate_rag_results(
     labeled_passed_count = 0
     reviewed_count = 0
     cohort_stats: dict[str, dict[str, int]] = {}
+    citation_accuracy_values: list[float] = []
+    refusal_checked_count = 0
+    refusal_passed_count = 0
+    faithfulness_scores: list[float] = []
 
     for case in cases:
         case_id = str(case.get("case_id") or "")
@@ -26,17 +30,34 @@ def evaluate_rag_results(
         expected_effective_hit = bool(case.get("expect_effective_hit", True))
         expected_route = str(case.get("expected_route") or "knowledge")
         actual_route = str(result.get("route") or "")
+        expected_citation_keywords = [
+            str(keyword) for keyword in case.get("expected_citation_keywords", [])
+        ]
         missing_keywords = _missing_citation_keywords(
             citations,
-            [str(keyword) for keyword in case.get("expected_citation_keywords", [])],
+            expected_citation_keywords,
         )
+        citation_accuracy = _citation_accuracy(missing_keywords, expected_citation_keywords)
+        expected_refusal = _expects_refusal(case)
+        actual_refusal = _is_refusal(result)
+        refusal_ok = actual_refusal == expected_refusal if expected_refusal is not None else None
+        faithfulness_score = _faithfulness_score(result, citations, missing_keywords)
 
         route_ok = actual_route == expected_route
         keywords_ok = not missing_keywords
         effective_hit_ok = effective_hit == expected_effective_hit
         passed = route_ok and keywords_ok and effective_hit_ok
+        if refusal_ok is not None:
+            passed = passed and refusal_ok
         if effective_hit:
             effective_hits += 1
+        if citation_accuracy is not None:
+            citation_accuracy_values.append(citation_accuracy)
+        if refusal_ok is not None:
+            refusal_checked_count += 1
+            refusal_passed_count += 1 if refusal_ok else 0
+        if faithfulness_score is not None:
+            faithfulness_scores.append(faithfulness_score)
         dataset_id = str(case.get("dataset_id") or "local")
         cohort = str(case.get("cohort") or "default")
         review_status = str(case.get("review_status") or "unreviewed")
@@ -84,6 +105,11 @@ def evaluate_rag_results(
             "effective_hit_ok": effective_hit_ok,
             "missing_keywords": missing_keywords,
             "keywords_ok": keywords_ok,
+            "citation_accuracy": citation_accuracy,
+            "expected_refusal": expected_refusal,
+            "actual_refusal": actual_refusal,
+            "refusal_ok": refusal_ok,
+            "faithfulness_score": faithfulness_score,
             "labeled": labeled,
             "passed": passed,
         }
@@ -100,6 +126,12 @@ def evaluate_rag_results(
             "failed": case_count - passed_count,
             "pass_rate": 0.0 if case_count == 0 else round(passed_count / case_count, 4),
             "effective_hit_rate": 0.0 if case_count == 0 else round(effective_hits / case_count, 4),
+            "citation_accuracy": _average(citation_accuracy_values),
+            "refusal_accuracy": 0.0
+            if refusal_checked_count == 0
+            else round(refusal_passed_count / refusal_checked_count, 4),
+            "refusal_case_count": refusal_checked_count,
+            "faithfulness_score": _average(faithfulness_scores),
             "labeled_case_count": labeled_count,
             "reviewed_case_count": reviewed_count,
             "offline_accuracy": 0.0
@@ -136,13 +168,76 @@ def _missing_citation_keywords(
     citation_text = " ".join(
         str(citation.get(field) or "")
         for citation in citations
-        for field in ("title", "excerpt", "content")
+        for field in ("title", "excerpt", "content", "source", "source_url")
     ).lower()
     return [
         keyword
         for keyword in expected_keywords
         if keyword.strip() and keyword.strip().lower() not in citation_text
     ]
+
+
+def _citation_accuracy(
+    missing_keywords: list[str],
+    expected_keywords: list[str],
+) -> float | None:
+    normalized = [keyword for keyword in expected_keywords if keyword.strip()]
+    if not normalized:
+        return None
+    matched = len(normalized) - len(missing_keywords)
+    return round(max(0.0, matched / len(normalized)), 4)
+
+
+def _expects_refusal(case: dict[str, Any]) -> bool | None:
+    if "expect_refusal" in case:
+        return bool(case.get("expect_refusal"))
+    label = case.get("label")
+    expected_answer_type = ""
+    if isinstance(label, dict):
+        expected_answer_type = str(label.get("expected_answer_type") or "")
+    if expected_answer_type in {"no_effective_hit", "refusal"}:
+        return True
+    if case.get("expect_effective_hit") is False:
+        return True
+    return None
+
+
+def _is_refusal(result: dict[str, Any]) -> bool:
+    if result.get("refusal") is True:
+        return True
+    if result.get("refusal_reason"):
+        return True
+    check = result.get("hallucination_check")
+    if isinstance(check, dict) and check.get("refusal") is True:
+        return True
+    return False
+
+
+def _faithfulness_score(
+    result: dict[str, Any],
+    citations: list[dict[str, Any]],
+    missing_keywords: list[str],
+) -> float | None:
+    check = result.get("hallucination_check")
+    if isinstance(check, dict):
+        raw_score = check.get("faithfulness_score")
+        try:
+            return round(float(raw_score), 4)
+        except (TypeError, ValueError):
+            pass
+    expected_count = len(missing_keywords)
+    citation_count = len(citations)
+    if citation_count == 0:
+        return None
+    if expected_count == 0:
+        return 1.0
+    return 0.0
+
+
+def _average(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return round(sum(values) / len(values), 4)
 
 
 def _is_labeled_case(case: dict[str, Any]) -> bool:
@@ -154,6 +249,7 @@ def _is_labeled_case(case: dict[str, Any]) -> bool:
             "expected_route",
             "expected_citation_keywords",
             "expect_effective_hit",
+            "expect_refusal",
             "min_score",
         )
     )

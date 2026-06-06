@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from customer_ai_runtime.application.retrieval import RetrievalService
 from customer_ai_runtime.application.runtime import zh
 from customer_ai_runtime.core.errors import AppError
 from customer_ai_runtime.core.text import build_embedding, chunk_text, cosine_similarity
@@ -16,7 +17,6 @@ from customer_ai_runtime.domain.models import (
     utcnow,
 )
 from customer_ai_runtime.providers.base import VectorStoreProvider
-from customer_ai_runtime.providers.local import citations_from_hits
 from customer_ai_runtime.repositories.base import KnowledgeRepository
 
 
@@ -25,9 +25,11 @@ class KnowledgeService:
         self,
         repository: KnowledgeRepository,
         vector_store: VectorStoreProvider,
+        retrieval_service: RetrievalService | None = None,
     ) -> None:
         self._repository = repository
         self._vector_store = vector_store
+        self._retrieval_service = retrieval_service or RetrievalService()
 
     async def create_knowledge_base(
         self,
@@ -185,7 +187,13 @@ class KnowledgeService:
                 "score": round(hit.score, 4),
                 "title": hit.chunk.title,
                 "chunk_id": hit.chunk.chunk_id,
+                "document_id": hit.chunk.document_id,
+                "version_id": hit.chunk.version_id,
                 "content": hit.chunk.content,
+                "source": hit.chunk.source,
+                "source_url": hit.chunk.source_url,
+                "page": hit.chunk.page,
+                "metadata": dict(hit.chunk.metadata),
             }
             for hit in normalized_hits
             if hit.score >= min_score
@@ -208,7 +216,7 @@ class KnowledgeService:
                 version_id=active_version.version_id,
             )[:top_k]
             hits = [RetrievalHit(chunk=chunk, score=0.1) for chunk in fallback_chunks]
-        return citations_from_hits(hits)
+        return self._retrieval_service.to_citations(query=query, hits=hits, top_k=top_k)
 
     def health_report(self, tenant_id: str, knowledge_base_id: str) -> dict[str, Any]:
         knowledge_base = self.get_knowledge_base(tenant_id, knowledge_base_id)
@@ -571,6 +579,15 @@ class KnowledgeService:
                 content=chunk,
                 position=index,
                 embedding=build_embedding(chunk),
+                source=self._metadata_text(
+                    document.metadata,
+                    "source",
+                    "source_filename",
+                    "filename",
+                ),
+                source_url=self._metadata_text(document.metadata, "source_url", "url"),
+                page=self._metadata_int(document.metadata, "page", "page_number"),
+                metadata=self._chunk_metadata(document.metadata, index),
             )
             for index, chunk in enumerate(
                 chunk_text(
@@ -603,6 +620,32 @@ class KnowledgeService:
             )
             normalized.append(hit.model_copy(update={"chunk": normalized_chunk}))
         return normalized
+
+    def _chunk_metadata(self, metadata: dict[str, Any], index: int) -> dict[str, Any]:
+        normalized = dict(metadata or {})
+        normalized.setdefault("chunk_index", index)
+        return normalized
+
+    def _metadata_text(self, metadata: dict[str, Any], *keys: str) -> str | None:
+        for key in keys:
+            value = metadata.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return None
+
+    def _metadata_int(self, metadata: dict[str, Any], *keys: str) -> int | None:
+        for key in keys:
+            value = metadata.get(key)
+            if value is None or value == "":
+                continue
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                continue
+        return None
 
     def _evaluate_chunk_candidate(
         self,

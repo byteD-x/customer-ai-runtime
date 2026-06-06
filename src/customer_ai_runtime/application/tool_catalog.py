@@ -152,6 +152,13 @@ class ToolCatalogService:
             "description": plugin.description,
             "required_parameters": list(plugin.required_parameters),
             "optional_parameters": list(plugin.optional_parameters),
+            "input_schema": self._input_schema(plugin),
+            "output_schema": self._output_schema(),
+            "timeout_ms": 8000,
+            "retry_policy": {
+                "max_attempts": 1,
+                "retryable_statuses": ["timeout", "provider_error"],
+            },
             "suggested_context_keys": list(plugin.suggested_context_keys),
             "plugin_id": descriptor.plugin_id,
             "version": descriptor.version,
@@ -163,6 +170,31 @@ class ToolCatalogService:
             "industry_scopes": list(descriptor.industry_scopes),
             "channel_scopes": list(descriptor.channel_scopes),
             "capabilities": list(descriptor.capabilities),
+        }
+
+    def _input_schema(self, plugin: BusinessToolPlugin) -> dict[str, Any]:
+        parameter_names = list(
+            dict.fromkeys(plugin.required_parameters + plugin.optional_parameters)
+        )
+        return {
+            "type": "object",
+            "properties": {name: {"type": "string"} for name in parameter_names},
+            "required": list(plugin.required_parameters),
+            "additionalProperties": True,
+        }
+
+    def _output_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "tool_name": {"type": "string"},
+                "status": {"type": "string"},
+                "summary": {"type": "string"},
+                "data": {"type": "object"},
+                "requires_handoff": {"type": "boolean"},
+            },
+            "required": ["tool_name", "status", "summary"],
+            "additionalProperties": True,
         }
 
     def _scope_match(

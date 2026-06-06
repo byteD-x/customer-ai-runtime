@@ -825,6 +825,7 @@ class AdminService:
             "last_route": None if session.last_route is None else session.last_route.value,
             "queue_backend": self.handoff_queue.name,
             "atomic_claim": self.handoff_queue.atomic_claim,
+            "consistency_scope": self.handoff_queue.consistency_scope,
         }
 
     def _accumulate_cost(

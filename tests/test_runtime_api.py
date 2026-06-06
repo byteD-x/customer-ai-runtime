@@ -57,7 +57,11 @@ def seed_knowledge_base(client: TestClient) -> None:
                 "\u4e03\u5929\u65e0\u7406\u7531\u9000\u6b3e\uff0c"
                 "\u552e\u540e\u5de5\u5355 24 \u5c0f\u65f6\u5185\u54cd\u5e94\u3002"
             ),
-            "metadata": {"source": "help-center"},
+            "metadata": {
+                "source": "help-center",
+                "source_url": "https://example.test/help/refund-policy",
+                "page": 3,
+            },
         },
     )
     assert response.status_code == 200
@@ -112,6 +116,50 @@ def test_chat_knowledge_flow(client: TestClient) -> None:
     data = response.json()["data"]
     assert data["route"] == "knowledge"
     assert data["citations"]
+    citation = data["citations"][0]
+    assert citation["source"] == "help-center"
+    assert citation["source_url"] == "https://example.test/help/refund-policy"
+    assert citation["page"] == 3
+    assert citation["metadata"]["chunk_index"] == 0
+    assert data["references"][0]["source"] == "help-center"
+    assert data["model_route"]["strategy"] == "static_route"
+    assert data["model_route"]["route"] == "knowledge"
+    assert data["selected_model"] == "local"
+    assert data["latency_ms"]["retrieval_ms"] >= 0
+    assert data["latency_ms"]["llm_ms"] >= 0
+
+
+def test_chat_knowledge_refuses_without_effective_citation(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    policy_update = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={"knowledge_min_score": 0.99},
+    )
+    assert policy_update.status_code == 200
+
+    response = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "Where is the end of the universe?",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["route"] == "knowledge"
+    assert data["citations"] == []
+    assert data["references"] == []
+    assert data["handoff"] is None
+    assert data["refusal"] is True
+    assert data["refusal_reason"] == "no_effective_citation"
+    assert data["hallucination_check"]["effective_citation_count"] == 0
+    assert data["latency_ms"]["retrieval_ms"] >= 0
+    assert data["latency_ms"]["llm_ms"] >= 0
 
 
 def test_upload_knowledge_document_from_markdown_file(client: TestClient) -> None:
@@ -699,8 +747,14 @@ def test_agent_tool_workflow_returns_trace(client: TestClient) -> None:
     assert len(trace) == 1
     assert trace[0]["tool_name"] == "order_status"
     assert trace[0]["status"] == "success"
+    assert trace[0]["phase"] == "execute"
     assert trace[0]["duration_ms"] >= 0
+    assert trace[0]["observation"]["data"]["tracking_no"] == "YT-2001"
     assert "ORD-1001" in trace[0]["summary"]
+    data = response.json()["data"]
+    assert data["plan"] == ["order_status"]
+    assert data["state"] == "final"
+    assert "ORD-1001" in data["final_answer"]
 
 
 def test_agent_tool_workflow_rejects_disallowed_tool(client: TestClient) -> None:
@@ -868,6 +922,10 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert first_data["billing_currency"] == "USD"
     assert first_data["billing_period"] == "per_request"
     assert first_data["tenant_budget_estimated_cents"] == 50.0
+    assert first_data["model_route"]["strategy"] == "static_route"
+    assert first_data["selected_model"] == "local"
+    assert first_data["latency_ms"]["retrieval_ms"] >= 0
+    assert first_data["latency_ms"]["llm_ms"] >= 0
 
     second = client.post(
         "/api/v1/chat/messages",
@@ -884,6 +942,8 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert second_data["route"] == "knowledge"
     assert second_data["cache_hit"] is True
     assert second_data["usage"]["total_tokens"] == 0
+    assert second_data["latency_ms"]["llm_ms"] == 0.0
+    assert second_data["model_route"]["selected_model"] == "local"
 
     business = client.post(
         "/api/v1/chat/messages",
@@ -1004,6 +1064,7 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     assert queue_data[0]["skill_group"] == "risk"
     assert queue_data[0]["queue_backend"] == "local"
     assert queue_data[0]["atomic_claim"] is True
+    assert queue_data[0]["consistency_scope"] == "single_process"
 
     filtered = client.get(
         "/api/v1/admin/handoff/queue",
@@ -1031,6 +1092,7 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     assert claimed["assigned_operator_id"] == "op_1"
     assert claimed["queue_backend"] == "local"
     assert claimed["atomic_claim"] is True
+    assert claimed["consistency_scope"] == "single_process"
 
     after_claim = client.get(
         "/api/v1/admin/handoff/queue",
