@@ -415,6 +415,7 @@
   - `tenant_id`
   - `skill_group`（可选）
 - 排序规则：优先级倒序，同优先级按 `handoff_enqueued_at` 先后排序
+- 入队来源：聊天自动转人工、`POST /api/v1/chat/handoff` 和 `request_human` 反馈均通过 `HandoffQueueBackend.enqueue` 写入队列；当前默认后端仍为 `local`
 - 返回重点：
   - `session_id`
   - `skill_group`

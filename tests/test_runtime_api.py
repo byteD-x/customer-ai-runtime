@@ -12,8 +12,10 @@ from fastapi.testclient import TestClient
 
 from customer_ai_runtime.app import create_app
 from customer_ai_runtime.application.auth import AuthBridgePlugin
+from customer_ai_runtime.application.container import ContainerOverrides, build_container
 from customer_ai_runtime.application.plugins import PluginDescriptor
 from customer_ai_runtime.core.config import get_settings
+from customer_ai_runtime.domain.models import Session, SessionState, utcnow
 from customer_ai_runtime.domain.platform import (
     AuthMode,
     AuthRequestContext,
@@ -24,6 +26,63 @@ from customer_ai_runtime.integration import CustomerAIRuntimeModule
 
 CUSTOMER_HEADERS = {"X-API-Key": "demo-public-key"}
 ADMIN_HEADERS = {"X-API-Key": "demo-admin-key"}
+
+
+class RecordingHandoffQueue:
+    name = "recording"
+    atomic_claim = False
+    consistency_scope = "test_backend"
+
+    def __init__(self) -> None:
+        self.enqueued: list[dict[str, object]] = []
+        self._sessions: list[Session] = []
+
+    def enqueue(
+        self,
+        session: Session,
+        *,
+        reason: str,
+        skill_group: str,
+        priority: int,
+    ) -> Session:
+        session.state = SessionState.WAITING_HUMAN
+        session.waiting_human = True
+        session.handoff_reason = reason
+        session.handoff_skill_group = skill_group
+        session.handoff_priority = priority
+        session.handoff_enqueued_at = session.handoff_enqueued_at or utcnow()
+        session.assigned_operator_id = None
+        self.enqueued.append(
+            {
+                "session_id": session.session_id,
+                "reason": reason,
+                "skill_group": skill_group,
+                "priority": priority,
+            }
+        )
+        self._sessions.append(session)
+        return session
+
+    def list_waiting(
+        self,
+        tenant_id: str,
+        skill_group: str | None = None,
+    ) -> list[Session]:
+        return [
+            session
+            for session in self._sessions
+            if session.tenant_id == tenant_id
+            and session.waiting_human
+            and (skill_group is None or session.handoff_skill_group == skill_group)
+        ]
+
+    def claim_next(
+        self,
+        tenant_id: str,
+        skill_group: str | None = None,
+        operator_id: str | None = None,
+    ) -> Session | None:
+        return None
 
 
 @pytest.fixture
@@ -1365,6 +1424,53 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     )
     assert after_claim.status_code == 200
     assert all(item["session_id"] != claimed["session_id"] for item in after_claim.json()["data"])
+
+
+def test_handoff_service_uses_injected_queue_backend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    get_settings.cache_clear()
+    queue = RecordingHandoffQueue()
+    container = build_container(
+        get_settings(),
+        overrides=ContainerOverrides(handoff_queue=queue),
+    )
+
+    with TestClient(create_app(container)) as local_client:
+        response = local_client.post(
+            "/api/v1/chat/messages",
+            headers=CUSTOMER_HEADERS,
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "\u6211\u8981\u8f6c\u4eba\u5de5\u5ba2\u670d",
+                "integration_context": {"industry": "ecommerce"},
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["state"] == "waiting_human"
+        assert data["handoff"] is not None
+
+        assert len(queue.enqueued) == 1
+        assert queue.enqueued[0]["session_id"] == data["session_id"]
+        assert queue.enqueued[0]["priority"] == 80
+
+        admin_queue = local_client.get(
+            "/api/v1/admin/handoff/queue",
+            headers=ADMIN_HEADERS,
+            params={"tenant_id": "demo-tenant"},
+        )
+        assert admin_queue.status_code == 200
+        queue_data = admin_queue.json()["data"]
+        assert len(queue_data) == 1
+        assert queue_data[0]["session_id"] == data["session_id"]
+        assert queue_data[0]["queue_backend"] == "recording"
+        assert queue_data[0]["atomic_claim"] is False
+        assert queue_data[0]["consistency_scope"] == "test_backend"
+    get_settings.cache_clear()
 
 
 def test_admin_session_monitor_and_diagnostics_filters(client: TestClient) -> None:

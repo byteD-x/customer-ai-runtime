@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from customer_ai_runtime.application.handoff_queue import HandoffQueueBackend
 from customer_ai_runtime.application.plugins import (
     HumanHandoffPlugin,
     PluginRegistry,
@@ -12,15 +13,14 @@ from customer_ai_runtime.domain.models import (
     HandoffPackage,
     MessageRole,
     Session,
-    SessionState,
-    utcnow,
 )
 from customer_ai_runtime.domain.platform import BusinessContext, PluginKind
 
 
 class HandoffService:
-    def __init__(self, registry: PluginRegistry) -> None:
+    def __init__(self, registry: PluginRegistry, handoff_queue: HandoffQueueBackend) -> None:
         self._registry = registry
+        self._handoff_queue = handoff_queue
 
     async def should_handoff(
         self,
@@ -64,13 +64,14 @@ class HandoffService:
         reason: str,
         business_context: BusinessContext,
     ):
-        session.state = SessionState.WAITING_HUMAN
-        session.waiting_human = True
-        session.handoff_reason = reason
-        session.handoff_skill_group = self._resolve_skill_group(reason, business_context)
-        session.handoff_priority = self._resolve_priority(reason, business_context)
-        session.handoff_enqueued_at = session.handoff_enqueued_at or utcnow()
-        session.assigned_operator_id = None
+        queued_session = self._handoff_queue.enqueue(
+            session,
+            reason=reason,
+            skill_group=self._resolve_skill_group(reason, business_context),
+            priority=self._resolve_priority(reason, business_context),
+        )
+        self._sync_queue_state(session, queued_session)
+        session = queued_session
         for plugin in self._registry.resolve(
             PluginKind.HUMAN_HANDOFF,
             tenant_id=business_context.tenant_id,
@@ -83,6 +84,15 @@ class HandoffService:
             if package is not None:
                 return self._enrich_package(package, session, reason, business_context)
         return None
+
+    def _sync_queue_state(self, target: Session, source: Session) -> None:
+        target.state = source.state
+        target.waiting_human = source.waiting_human
+        target.handoff_reason = source.handoff_reason
+        target.handoff_skill_group = source.handoff_skill_group
+        target.handoff_priority = source.handoff_priority
+        target.handoff_enqueued_at = source.handoff_enqueued_at
+        target.assigned_operator_id = source.assigned_operator_id
 
     def _enrich_package(
         self,

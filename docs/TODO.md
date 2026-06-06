@@ -19,7 +19,7 @@
 - RAG 文件上传解析：文本 / Markdown 已可走上传入口，PDF / Word 依赖 `providers` extra
 - AgentWorkflow HTTP API：顺序工具步骤、工具白名单、步骤上限、失败停止与 trace
 - 结构化交接包：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号
-- 单实例人工接管队列：技能组、优先级、单进程原子 `claim-next`，返回 `consistency_scope=single_process`
+- 单实例人工接管队列：`HandoffQueueBackend.enqueue` 入队契约、技能组、优先级、单进程原子 `claim-next`，返回 `consistency_scope=single_process`
 - 外部 readiness 脚本：OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖未配置时返回 `skipped`
 - 线上 RAG 样本评估入口：`scripts/eval_online_rag.py` 读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`
 - k6 smoke 模板：`deploy/k6-smoke.js` 可对健康检查和管理端指标摘要做可复现压测入口
@@ -34,7 +34,7 @@
 
 ### P1：生产化增强
 
-- **多实例人工队列**：将当前 Session 轻量队列迁移为 Redis sorted set 原子 pop 或数据库事务认领。
+- **多实例人工队列**：当前已完成 `HandoffQueueBackend.enqueue` 入队接口化前置切片；后续将当前 Session 轻量队列迁移为 Redis sorted set 原子 pop 或数据库事务认领。
 - **真实成本结算**：在当前本地模型价格表基础上，继续接入真实 provider usage、租户预算阈值、币种和账单结算。
 - **外部系统联调**：在 readiness 脚本基础上，补充真实 OpenAI / Qdrant / 业务 API / 客服工单系统的端到端联调记录。
 - **部署材料完善**：在现有 Docker Compose 基础上，继续细化环境变量模板、启动检查、Qdrant 联调和常见故障排查。

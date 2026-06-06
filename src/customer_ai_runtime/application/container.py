@@ -17,6 +17,10 @@ from customer_ai_runtime.application.business import (
 )
 from customer_ai_runtime.application.chat import ChatService
 from customer_ai_runtime.application.handoff import HandoffService
+from customer_ai_runtime.application.handoff_queue import (
+    HandoffQueueBackend,
+    LocalHandoffQueueBackend,
+)
 from customer_ai_runtime.application.ingestion import DocumentIngestionService
 from customer_ai_runtime.application.knowledge import KnowledgeService
 from customer_ai_runtime.application.plugins import PluginRegistry, build_builtin_plugins
@@ -75,6 +79,7 @@ class Container:
     knowledge_domain_manager: KnowledgeDomainManager
     tool_catalog: ToolCatalogService
     tool_service: ToolService
+    handoff_queue: HandoffQueueBackend
     chat_service: ChatService
     voice_service: VoiceService
     rtc_service: RTCService
@@ -92,6 +97,7 @@ class ContainerOverrides:
     knowledge_repository: KnowledgeRepository | None = None
     rtc_repository: RTCRepository | None = None
     diagnostics_repository: DiagnosticsRepository | None = None
+    handoff_queue: HandoffQueueBackend | None = None
     extra: dict[str, Any] | None = None
 
 
@@ -141,6 +147,7 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
     tool_catalog = ToolCatalogService(plugin_registry)
 
     session_service = SessionService(session_repository, diagnostics)
+    handoff_queue = overrides.handoff_queue or LocalHandoffQueueBackend(session_service)
     knowledge_service = KnowledgeService(knowledge_repository, vector_store)
     industry_service = IndustryService(plugin_registry)
     business_context_builder = BusinessContextBuilder(plugin_registry, industry_service)
@@ -155,7 +162,7 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
             parameters=parameters,
         )
     )
-    handoff_service = HandoffService(plugin_registry)
+    handoff_service = HandoffService(plugin_registry, handoff_queue)
     response_enhancement_orchestrator = ResponseEnhancementOrchestrator(plugin_registry)
     chat_service = ChatService(
         session_service=session_service,
@@ -191,6 +198,7 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
         metrics=metrics,
         diagnostics=diagnostics,
         plugin_registry=plugin_registry,
+        handoff_queue=handoff_queue,
     )
     return Container(
         settings=settings,
@@ -206,6 +214,7 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
         knowledge_domain_manager=knowledge_domain_manager,
         tool_catalog=tool_catalog,
         tool_service=tool_service,
+        handoff_queue=handoff_queue,
         chat_service=chat_service,
         voice_service=voice_service,
         rtc_service=rtc_service,

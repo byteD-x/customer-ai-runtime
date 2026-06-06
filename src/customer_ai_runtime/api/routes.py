@@ -234,7 +234,6 @@ async def handoff_chat(
         payload.reason,
         context,
     )
-    container.session_service.save(session)
     return success_response(None if handoff is None else handoff.model_dump(mode="json"))
 
 
@@ -301,7 +300,6 @@ async def submit_message_feedback(
             payload.comment or "user_feedback_requested_human",
             context,
         )
-        container.session_service.save(session)
     return success_response(
         {
             "message": message.model_dump(mode="json"),

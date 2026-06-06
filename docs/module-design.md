@@ -382,6 +382,6 @@
 
 - 当前交付以单体参考实现为主。
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
-- 当前人工接管队列是基于 `Session` 的单实例轻量队列；`queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 仅表示单进程锁内认领边界，Redis sorted set / 数据库事务认领属于 future target。
+- 当前人工接管队列是基于 `Session` 的单实例轻量队列；人工接管入队已通过 `HandoffQueueBackend.enqueue` 接口化并由容器统一注入，默认仍为 `local` 后端；`queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 仅表示单进程锁内认领边界，Redis sorted set / 数据库事务认领属于 future target。
 - 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`；online eval 只代表输入样本，不代表全量线上准确率。
 - 当前成本治理是本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值，不代表真实 provider 账单或线上节省比例。
