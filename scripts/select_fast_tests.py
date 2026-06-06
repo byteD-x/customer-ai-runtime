@@ -15,6 +15,12 @@ STREAM_TARGETS = (
 SUITE_TARGETS = {
     "stream": STREAM_TARGETS,
     "api": ("tests/test_runtime_api.py",),
+    "handoff": (
+        "tests/test_runtime_api.py::test_handoff_flow",
+        "tests/test_runtime_api.py::test_message_feedback_can_request_human_handoff",
+        "tests/test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group",
+        "tests/test_runtime_api.py::test_handoff_service_uses_injected_queue_backend",
+    ),
     "rag": (
         "tests/test_rag_quality.py",
         "tests/test_interview_artifacts.py",
@@ -40,6 +46,7 @@ SUITE_ORDER = (
     "selector",
     "stream",
     "api",
+    "handoff",
     "rag",
     "agent",
     "providers",
@@ -105,11 +112,11 @@ def select_targets(changed_paths: Iterable[str]) -> FastTestSelection:
             suites.add("smoke")
             continue
         if path.startswith("src/customer_ai_runtime/"):
-            matched_suite = _suite_for_source_path(path)
-            if matched_suite is None:
+            matched_suites = _suites_for_source_path(path)
+            if not matched_suites:
                 unknown_runtime_change = True
             else:
-                suites.add(matched_suite)
+                suites.update(matched_suites)
             continue
         unknown_runtime_change = True
 
@@ -180,26 +187,29 @@ def main() -> int:
     return 0
 
 
-def _suite_for_source_path(path: str) -> str | None:
+def _suites_for_source_path(path: str) -> tuple[str, ...]:
     if path == "src/customer_ai_runtime/evaluation.py":
-        return "rag"
+        return ("rag",)
     if path.startswith("src/customer_ai_runtime/providers/"):
-        return "providers"
+        return ("providers",)
     if path in {
         "src/customer_ai_runtime/application/agent_workflow.py",
     }:
-        return "agent"
+        return ("agent",)
     if path == "src/customer_ai_runtime/application/tool_catalog.py":
-        return "api"
+        return ("api",)
+    if path == "src/customer_ai_runtime/application/container.py":
+        return ("api", "providers")
     if path.startswith("src/customer_ai_runtime/application/"):
-        return _suite_for_application_path(path)
+        suite = _suite_for_application_path(path)
+        return () if suite is None else (suite,)
     if path.startswith("src/customer_ai_runtime/api/"):
-        return "api"
+        return ("api",)
     if path.startswith("src/customer_ai_runtime/core/"):
-        return "api"
+        return ("api",)
     if path.startswith("src/customer_ai_runtime/domain/"):
-        return "api"
-    return None
+        return ("api",)
+    return ()
 
 
 def _suite_for_application_path(path: str) -> str | None:
@@ -228,13 +238,20 @@ def _suite_for_application_path(path: str) -> str | None:
             "chat.py",
             "admin.py",
             "runtime.py",
-            "handoff.py",
             "auth.py",
             "business.py",
             "costs.py",
         )
     ):
         return "api"
+    if any(
+        name in path
+        for name in (
+            "handoff.py",
+            "handoff_queue.py",
+        )
+    ):
+        return "handoff"
     return None
 
 

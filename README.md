@@ -329,8 +329,9 @@ runtime.register_plugin(OrderStatusTool())
 # 开发中快速验证当前切片，默认 stream suite
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 
-# 按预设场景快速回归：auto / stream / api / rag / agent / providers / smoke / external / selector / full
+# 按预设场景快速回归：auto / stream / api / handoff / rag / agent / providers / smoke / external / selector / full
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite auto
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite selector
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite providers
 

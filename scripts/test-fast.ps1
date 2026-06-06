@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("auto", "stream", "api", "rag", "agent", "providers", "smoke", "external", "selector", "full")]
+    [ValidateSet("auto", "stream", "api", "handoff", "rag", "agent", "providers", "smoke", "external", "selector", "full")]
     [string] $Suite = "stream",
 
     [string[]] $Target = @(),
@@ -44,6 +44,14 @@ function Resolve-PytestArgs {
             }
             "api" {
                 $pytestArgs += "tests/test_runtime_api.py"
+            }
+            "handoff" {
+                $pytestArgs += @(
+                    "tests/test_runtime_api.py::test_handoff_flow",
+                    "tests/test_runtime_api.py::test_message_feedback_can_request_human_handoff",
+                    "tests/test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group",
+                    "tests/test_runtime_api.py::test_handoff_service_uses_injected_queue_backend"
+                )
             }
             "rag" {
                 $pytestArgs += @(

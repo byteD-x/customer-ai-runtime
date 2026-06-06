@@ -35,6 +35,27 @@ def test_selects_api_suite_for_tool_catalog_change() -> None:
     assert selection.targets == ("tests/test_runtime_api.py",)
 
 
+def test_selects_handoff_suite_for_handoff_queue_change() -> None:
+    selection = select_targets(["src/customer_ai_runtime/application/handoff_queue.py"])
+
+    assert selection.suites == ("handoff",)
+    assert selection.targets == (
+        "tests/test_runtime_api.py::test_handoff_flow",
+        "tests/test_runtime_api.py::test_message_feedback_can_request_human_handoff",
+        "tests/test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group",
+        "tests/test_runtime_api.py::test_handoff_service_uses_injected_queue_backend",
+    )
+
+
+def test_selects_api_and_providers_suites_for_container_change() -> None:
+    selection = select_targets(["src/customer_ai_runtime/application/container.py"])
+
+    assert selection.suites == ("api", "providers")
+    assert "tests/test_runtime_api.py" in selection.targets
+    assert "tests/test_provider_extensions.py" in selection.targets
+    assert "tests/test_speech_provider_extensions.py" in selection.targets
+
+
 def test_selects_smoke_suite_for_docs_change() -> None:
     selection = select_targets(["docs/testing.md"])
 
