@@ -125,6 +125,8 @@ k6 run deploy\k6-smoke.js
 
 - Prompt 更新会形成版本历史，记录 revision、变更摘要和激活状态，便于解释“为什么这次回答策略变了”。
 - Prompt hash 已进入知识问答缓存 key，避免 Prompt 变更后复用旧缓存答案。
+- `GET /api/v1/admin/prompts/revisions` 可查看只读 revision 摘要，返回字段长度和 hash，不暴露 Prompt 原文。
+- `GET /api/v1/admin/prompts/{revision}/diff` 可对比 active revision 与目标 revision，输出字段级变化、长度差和 hash 差异。
 - 回滚 API 为 `POST /api/v1/admin/prompts/{revision}/rollback`，用于把历史版本恢复为新的激活版本，并保留完整 revision 审计链。
 
 **代码证据**
@@ -138,6 +140,9 @@ k6 run deploy\k6-smoke.js
 
 - 问：为什么回滚不是直接覆盖当前 Prompt？
 - 答：回滚也应生成一条新版本记录，这样审计链路能看到从哪个 revision 回退、谁触发、原因是什么；直接覆盖会丢失事故复盘线索。
+
+- 问：为什么 diff 接口不直接返回 Prompt 原文？
+- 答：系统提示词和运营提示词可能包含内部策略，审计接口只需要证明“哪些字段变了、长度和 hash 如何变化”；原文继续留在受权限保护的配置视图里，降低扩散面。
 
 ## 6. 受控 Agent 工具流：为什么不是开放式 Agent？
 
@@ -240,8 +245,8 @@ k6 run deploy\k6-smoke.js
 
 - **S**：Prompt 调整和多工具自动化都可能引入回答漂移、越权调用或难以复盘的问题。
 - **T**：在不宣称线上指标的前提下，补齐本地可解释的 Prompt 版本历史和受控工具编排设计。
-- **A**：Prompt 更新记录 revision，缓存 key 绑定 prompt hash；工具流限制白名单、步骤上限和失败降级，并保留审计轨迹。
-- **R**：本地测试覆盖 Prompt 回滚、受控工具流 trace、禁用工具拦截与步骤上限，适合作为面试中的治理设计讲点。
+- **A**：Prompt 更新记录 revision，缓存 key 绑定 prompt hash；只读 revision 摘要和安全 diff 仅暴露长度与 hash，并通过 `issues` 标记空账本、损坏账本和 active 不唯一；工具流限制白名单、步骤上限和失败降级，并保留审计轨迹。
+- **R**：本地测试覆盖 Prompt 回滚、revision 摘要、安全 diff、异常账本 issues、受控工具流 trace、禁用工具拦截与步骤上限，适合作为面试中的治理设计讲点。
 
 ## 9. 边界与 future target
 

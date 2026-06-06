@@ -781,6 +781,180 @@ def test_admin_prompt_rollback_unknown_revision_rejected(client: TestClient) -> 
     assert response.json()["error"]["code"] == "not_found"
 
 
+def test_admin_prompt_revisions_return_safe_metadata(client: TestClient) -> None:
+    secret_prompt = "DO_NOT_LEAK_PROMPT_SECRET"
+    update = client.put(
+        "/api/v1/admin/prompts",
+        headers=ADMIN_HEADERS,
+        json={
+            "fallback_answer": secret_prompt,
+            "change_summary": "temporary safe metadata check",
+        },
+    )
+    assert update.status_code == 200
+
+    response = client.get("/api/v1/admin/prompts/revisions", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["active_revision"] == 2
+    assert data["revision_count"] == 2
+    assert data["issues"] == []
+    assert len(data["revisions"]) == 2
+    revision = data["revisions"][-1]
+    assert revision["revision"] == 2
+    assert revision["active"] is True
+    assert revision["change_summary"] == "temporary safe metadata check"
+    assert revision["prompt_lengths"]["fallback_answer"] == len(secret_prompt)
+    assert len(revision["prompt_hashes"]["fallback_answer"]) == 12
+    assert "prompts" not in revision
+    assert "fallback_answer" not in revision
+    assert secret_prompt not in response.text
+
+
+def test_admin_prompt_diff_compares_active_revision_with_target(
+    client: TestClient,
+) -> None:
+    update = client.put(
+        "/api/v1/admin/prompts",
+        headers=ADMIN_HEADERS,
+        json={
+            "fallback_answer": "temporary diff prompt",
+            "change_summary": "temporary diff check",
+        },
+    )
+    assert update.status_code == 200
+
+    response = client.get("/api/v1/admin/prompts/1/diff", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["base_revision"] == 2
+    assert data["target_revision"] == 1
+    assert data["diff_available"] is True
+    assert "fallback_answer" in data["changed_fields"]
+    fallback_diff = next(item for item in data["field_diffs"] if item["field"] == "fallback_answer")
+    assert fallback_diff["changed"] is True
+    assert fallback_diff["base"]["revision"] == 2
+    assert fallback_diff["target"]["revision"] == 1
+    assert "temporary diff prompt" not in response.text
+
+
+def test_admin_prompt_diff_unknown_revision_rejected(client: TestClient) -> None:
+    response = client.get("/api/v1/admin/prompts/99/diff", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_admin_prompt_revisions_report_empty_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage_root = tmp_path / "storage"
+    _write_runtime_config(storage_root, {"prompt_versions": []})
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(storage_root))
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as local_client:
+        response = local_client.get(
+            "/api/v1/admin/prompts/revisions",
+            headers=ADMIN_HEADERS,
+        )
+
+    get_settings.cache_clear()
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["revision_count"] == 1
+    assert data["issues"][0]["code"] == "prompt_versions_empty"
+
+
+def test_admin_prompt_revisions_report_invalid_ledger_item(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage_root = tmp_path / "storage"
+    _write_runtime_config(storage_root, {"prompt_versions": [{"revision": 1}]})
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(storage_root))
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as local_client:
+        response = local_client.get(
+            "/api/v1/admin/prompts/revisions",
+            headers=ADMIN_HEADERS,
+        )
+
+    get_settings.cache_clear()
+    assert response.status_code == 200
+    issue_codes = {item["code"] for item in response.json()["data"]["issues"]}
+    assert "prompt_version_invalid" in issue_codes
+    assert "prompt_versions_unusable" in issue_codes
+
+
+def test_admin_prompt_diff_reports_non_unique_active_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage_root = tmp_path / "storage"
+    _write_runtime_config(
+        storage_root,
+        {
+            "prompt_versions": [
+                _prompt_revision_payload(1, active=True, fallback_answer="base prompt"),
+                _prompt_revision_payload(2, active=True, fallback_answer="target prompt"),
+            ]
+        },
+    )
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(storage_root))
+    get_settings.cache_clear()
+
+    with TestClient(create_app()) as local_client:
+        revisions = local_client.get(
+            "/api/v1/admin/prompts/revisions",
+            headers=ADMIN_HEADERS,
+        )
+        diff = local_client.get("/api/v1/admin/prompts/1/diff", headers=ADMIN_HEADERS)
+
+    get_settings.cache_clear()
+    assert revisions.status_code == 200
+    revision_data = revisions.json()["data"]
+    assert revision_data["active_revision"] is None
+    assert revision_data["issues"][0]["code"] == "active_revision_not_unique"
+    assert diff.status_code == 200
+    diff_data = diff.json()["data"]
+    assert diff_data["diff_available"] is False
+    assert diff_data["base_revision"] is None
+    assert diff_data["issues"][0]["code"] == "active_revision_not_unique"
+
+
+def _write_runtime_config(storage_root: Path, payload: dict[str, object]) -> None:
+    state_dir = storage_root / "state"
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / "runtime_config.json").write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def _prompt_revision_payload(
+    revision: int,
+    *,
+    active: bool,
+    fallback_answer: str,
+) -> dict[str, object]:
+    return {
+        "revision": revision,
+        "active": active,
+        "change_summary": f"revision {revision}",
+        "prompts": {
+            "knowledge_answer": "knowledge prompt",
+            "business_answer": "business prompt",
+            "fallback_answer": fallback_answer,
+            "handoff_summary": "handoff prompt",
+        },
+    }
+
+
 def test_agent_tool_workflow_returns_trace(client: TestClient) -> None:
     response = client.post(
         "/api/v1/agents/tool-workflow",

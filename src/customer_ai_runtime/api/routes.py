@@ -753,6 +753,31 @@ async def get_admin_prompts(
     return success_response(get_container(request).admin_service.get_prompts())
 
 
+@router.get("/api/v1/admin/prompts/revisions")
+async def get_admin_prompt_revisions(
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    require_staff(auth_context)
+    return success_response(get_container(request).admin_service.get_prompt_revisions())
+
+
+@router.get("/api/v1/admin/prompts/{revision}/diff")
+async def diff_admin_prompt_revision(
+    revision: int,
+    request: Request,
+    base_revision: int | None = Query(default=None, ge=1),
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    require_staff(auth_context)
+    return success_response(
+        get_container(request).admin_service.diff_prompt_revision(
+            revision,
+            base_revision=base_revision,
+        )
+    )
+
+
 @router.get("/api/v1/admin/runtime-config")
 async def get_admin_runtime_config(
     request: Request,

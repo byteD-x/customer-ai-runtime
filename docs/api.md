@@ -454,6 +454,34 @@
   - `prompt_versions`
   - `active_revision`
 
+### `GET /api/v1/admin/prompts/revisions`
+
+- 用途：查看 Prompt revision 只读治理摘要，不返回 Prompt 原文
+- 权限：`admin` / `operator`
+- 返回重点：
+  - `active_revision`
+  - `revision_count`
+  - `revisions`
+  - `issues`
+- `revisions` 字段只包含 `version_id`、`revision`、`active`、`change_summary`、`created_at`、`prompt_lengths`、`prompt_hashes`
+- `issues` 用于暴露空账本、损坏账本、active revision 不唯一、revision 重复等治理问题
+
+### `GET /api/v1/admin/prompts/{revision}/diff`
+
+- 用途：对比指定 Prompt revision 与基准 revision，默认基准为当前唯一 active revision
+- 权限：`admin` / `operator`
+- 可选查询参数：
+  - `base_revision`：指定基准 revision；不传时使用当前唯一 active revision
+- 返回重点：
+  - `base_revision`
+  - `target_revision`
+  - `diff_available`
+  - `changed_fields`
+  - `field_diffs`
+  - `issues`
+- `field_diffs` 只返回字段名、是否变化、长度、`sha256_12` 和长度差，不返回 Prompt 原文
+- 若 active revision 不唯一，默认 diff 会返回 `diff_available=false`，并在 `issues` 中说明原因
+
 ### `GET /api/v1/admin/runtime-config`
 
 - 用途：查看运行时热配置快照

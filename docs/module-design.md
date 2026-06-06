@@ -355,6 +355,14 @@
 - Plugin 状态
 - Provider 健康状态
 
+### Prompt 治理
+
+- `GET /api/v1/admin/prompts` 保留当前 Prompt 配置与完整版本历史视图，用于兼容现有管理端读取。
+- `GET /api/v1/admin/prompts/revisions` 输出只读 revision 摘要，仅包含版本元数据、Prompt 字段长度和 `sha256_12`，不返回 Prompt 原文。
+- `GET /api/v1/admin/prompts/{revision}/diff` 默认对比当前唯一 active revision 与目标 revision；也可通过 `base_revision` 指定基准。
+- Prompt diff 只返回字段级变化、长度、hash 和长度差，避免把系统提示词或运营提示词原文扩散到审计接口。
+- Prompt revision `issues` 会暴露空账本、损坏账本、active revision 不唯一、revision 重复等治理风险，便于面试演示“可审计、可回滚、可诊断”的 Prompt 管理闭环。
+
 ### 当前统计摘要
 
 - `satisfaction_summary`

@@ -346,6 +346,19 @@ class AdminService:
             "active_revision": active_revision,
         }
 
+    def get_prompt_revisions(self) -> dict[str, Any]:
+        return self.runtime_config.list_prompt_revision_summaries()
+
+    def diff_prompt_revision(
+        self,
+        revision: int,
+        base_revision: int | None = None,
+    ) -> dict[str, Any]:
+        return self.runtime_config.diff_prompt_revision(
+            revision,
+            base_revision=base_revision,
+        )
+
     def update_prompts(self, data: dict[str, Any]) -> dict[str, Any]:
         return self.runtime_config.update_prompts(data).model_dump(mode="json")
 

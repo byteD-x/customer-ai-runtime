@@ -10,7 +10,7 @@
 - 已有能力：文本、语音、RTC、知识库、业务工具、人工接手、管理 API、示例、基础测试。
 - 本轮新增已落地能力：`Auth Bridge`、插件注册中心、行业适配器、上下文解析、知识域管理、回复后处理、插件管理接口、多认证模式测试。
 - 本轮进一步增强：插件生命周期自动启动/关闭、插件启停状态持久化、宿主自定义桥接插件注册入口与示例。
-- 面试项目强化能力已落地：成本治理与知识问答缓存、usage 来源/币种/账期/预算阈值字段、可配置模型价格表、RAG eval 本地标注样例、RAG 引用来源与拒答门禁、线上样本评估入口、结构化交接包、单进程人工接管队列、外部 readiness 脚本、k6 smoke 模板、面试演示脚本和 STAR 材料。
+- 面试项目强化能力已落地：成本治理与知识问答缓存、usage 来源/币种/账期/预算阈值字段、可配置模型价格表、Prompt revision 只读摘要与安全 diff、RAG eval 本地标注样例、RAG 引用来源与拒答门禁、线上样本评估入口、结构化交接包、单进程人工接管队列、外部 readiness 脚本、k6 smoke 模板、面试演示脚本和 STAR 材料。
 - 仍保留的边界：当前为单体参考实现，外部 OpenAI / Qdrant / 真实业务系统 / 客服工单系统联调依赖外部配置；readiness 脚本只检查配置、可达性和部分权限探针，不代表端到端联调通过。
 
 ## 3. 阶段状态
@@ -45,6 +45,7 @@
 - LLM usage / cache hit / estimated cost 记录、`usage_source`、`billing_currency`、`billing_period`、`tenant_budget_estimated_cents` 与成本摘要接口
 - 可配置模型价格表，用于按 provider / model 估算本轮调用成本
 - 知识问答安全缓存与业务查询不缓存策略
+- Prompt revision 只读摘要、安全 diff、账本异常 issues 与回滚审计链路
 - RAG eval 8 个本地标注 cases、多知识库样例、cohort、人工复核状态、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score`、评测脚本与失败明细
 - 结构化 `handoff_package`：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文与行为信号
 - 单进程人工接管队列、技能组、优先级排序、`queue_backend` / `atomic_claim` / `consistency_scope` 返回字段和 `claim-next`

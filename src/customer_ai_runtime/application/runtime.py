@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from collections import Counter
 from pathlib import Path
 from time import time
 from typing import Any
+
+from pydantic import ValidationError
 
 from customer_ai_runtime.core.diagnostics_export import DiagnosticsJsonlExporter
 from customer_ai_runtime.core.errors import AppError
@@ -52,6 +55,7 @@ class RuntimeConfigService:
         self._policies = PolicyConfig()
         self._alerts = AlertRuleConfig()
         self._prompt_history: list[PromptTemplateRecord] = []
+        self._prompt_history_issues: list[dict[str, Any]] = []
         self._plugin_states: dict[str, bool] = {}
         self._response_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._response_cache_stats: Counter[str] = Counter()
@@ -73,6 +77,53 @@ class RuntimeConfigService:
 
     def list_prompt_versions(self) -> list[PromptTemplateRecord]:
         return [record.model_copy(deep=True) for record in self._prompt_history]
+
+    def list_prompt_revision_summaries(self) -> dict[str, Any]:
+        active_revisions = [
+            record.revision for record in self._prompt_history if record.active is True
+        ]
+        active_revision = active_revisions[0] if len(active_revisions) == 1 else None
+        return {
+            "active_revision": active_revision,
+            "revision_count": len(self._prompt_history),
+            "revisions": [self._prompt_revision_summary(record) for record in self._prompt_history],
+            "issues": self._prompt_revision_issues(),
+        }
+
+    def diff_prompt_revision(
+        self,
+        revision: int,
+        *,
+        base_revision: int | None = None,
+    ) -> dict[str, Any]:
+        target = self._find_prompt_revision(revision, role="target")
+        issues = self._prompt_revision_issues()
+        base = (
+            self._find_prompt_revision(base_revision, role="base")
+            if base_revision is not None
+            else self._active_prompt_revision()
+        )
+        if base is None:
+            return {
+                "base_revision": None,
+                "target_revision": target.revision,
+                "diff_available": False,
+                "changed_fields": [],
+                "field_diffs": [],
+                "issues": issues,
+            }
+
+        field_diffs = [
+            self._prompt_field_diff(field, base, target) for field in PromptConfig.model_fields
+        ]
+        return {
+            "base_revision": base.revision,
+            "target_revision": target.revision,
+            "diff_available": True,
+            "changed_fields": [item["field"] for item in field_diffs if item["changed"] is True],
+            "field_diffs": field_diffs,
+            "issues": issues,
+        }
 
     def rollback_prompts(
         self,
@@ -175,15 +226,47 @@ class RuntimeConfigService:
     def _load(self) -> None:
         if not self._storage_path or not self._storage_path.exists():
             return
-        payload = json.loads(self._storage_path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(self._storage_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            self._prompt_history_issues.append(
+                _prompt_issue(
+                    "runtime_config_unreadable",
+                    "runtime config 文件无法读取或解析",
+                    error_type=type(exc).__name__,
+                )
+            )
+            return
+        if not isinstance(payload, dict):
+            self._prompt_history_issues.append(
+                _prompt_issue(
+                    "runtime_config_invalid",
+                    "runtime config 顶层结构必须是对象",
+                    payload_type=type(payload).__name__,
+                )
+            )
+            return
         if "prompts" in payload:
-            self._prompts = PromptConfig.model_validate(payload["prompts"])
+            try:
+                self._prompts = PromptConfig.model_validate(payload["prompts"])
+            except ValidationError as exc:
+                self._prompt_history_issues.append(
+                    _prompt_issue(
+                        "prompt_config_invalid",
+                        "Prompt 配置无法通过校验",
+                        error_count=len(exc.errors()),
+                    )
+                )
         if "prompt_versions" in payload and isinstance(payload["prompt_versions"], list):
-            self._prompt_history = [
-                PromptTemplateRecord.model_validate(item)
-                for item in payload["prompt_versions"]
-                if isinstance(item, dict)
-            ]
+            self._prompt_history = self._load_prompt_history(payload["prompt_versions"])
+        elif "prompt_versions" in payload:
+            self._prompt_history_issues.append(
+                _prompt_issue(
+                    "prompt_versions_invalid_type",
+                    "Prompt 版本账本必须是列表",
+                    payload_type=type(payload["prompt_versions"]).__name__,
+                )
+            )
         if not self._prompt_history:
             self._append_prompt_version("initial prompts", flush=False)
         if "policies" in payload:
@@ -236,6 +319,136 @@ class RuntimeConfigService:
         )
         if flush:
             self._flush()
+
+    def _load_prompt_history(self, payload: list[Any]) -> list[PromptTemplateRecord]:
+        if not payload:
+            self._prompt_history_issues.append(
+                _prompt_issue("prompt_versions_empty", "Prompt 版本账本为空")
+            )
+            return []
+        records: list[PromptTemplateRecord] = []
+        for index, item in enumerate(payload):
+            if not isinstance(item, dict):
+                self._prompt_history_issues.append(
+                    _prompt_issue(
+                        "prompt_version_invalid",
+                        "Prompt 版本账本条目必须是对象",
+                        index=index,
+                        payload_type=type(item).__name__,
+                    )
+                )
+                continue
+            try:
+                records.append(PromptTemplateRecord.model_validate(item))
+            except ValidationError as exc:
+                self._prompt_history_issues.append(
+                    _prompt_issue(
+                        "prompt_version_invalid",
+                        "Prompt 版本账本条目无法通过校验",
+                        index=index,
+                        error_count=len(exc.errors()),
+                    )
+                )
+        if not records:
+            self._prompt_history_issues.append(
+                _prompt_issue(
+                    "prompt_versions_unusable",
+                    "Prompt 版本账本没有可用 revision 记录",
+                )
+            )
+        return records
+
+    def _prompt_revision_summary(self, record: PromptTemplateRecord) -> dict[str, Any]:
+        prompts = record.prompts.model_dump(mode="json")
+        return {
+            "version_id": record.version_id,
+            "revision": record.revision,
+            "active": record.active,
+            "change_summary": record.change_summary,
+            "created_at": record.created_at.isoformat(),
+            "prompt_lengths": {
+                field: len(str(prompts.get(field) or "")) for field in PromptConfig.model_fields
+            },
+            "prompt_hashes": {
+                field: _prompt_hash(str(prompts.get(field) or ""))
+                for field in PromptConfig.model_fields
+            },
+        }
+
+    def _prompt_revision_issues(self) -> list[dict[str, Any]]:
+        issues = list(self._prompt_history_issues)
+        active_revisions = [
+            record.revision for record in self._prompt_history if record.active is True
+        ]
+        if self._prompt_history and len(active_revisions) != 1:
+            issues.append(
+                _prompt_issue(
+                    "active_revision_not_unique",
+                    "Prompt 账本必须且只能有一个 active revision",
+                    active_count=len(active_revisions),
+                    active_revisions=active_revisions,
+                )
+            )
+        revision_counts = Counter(record.revision for record in self._prompt_history)
+        duplicate_revisions = [revision for revision, count in revision_counts.items() if count > 1]
+        if duplicate_revisions:
+            issues.append(
+                _prompt_issue(
+                    "duplicate_prompt_revision",
+                    "Prompt 账本存在重复 revision 编号",
+                    revisions=duplicate_revisions,
+                )
+            )
+        return issues
+
+    def _find_prompt_revision(
+        self,
+        revision: int,
+        *,
+        role: str,
+    ) -> PromptTemplateRecord:
+        record = next(
+            (item for item in self._prompt_history if item.revision == revision),
+            None,
+        )
+        if record is None:
+            role_name = "基准" if role == "base" else "目标"
+            raise AppError(
+                code="not_found",
+                message=f"Prompt {role_name} revision {revision} 不存在。",
+                status_code=404,
+            )
+        return record
+
+    def _active_prompt_revision(self) -> PromptTemplateRecord | None:
+        active_records = [record for record in self._prompt_history if record.active is True]
+        if len(active_records) != 1:
+            return None
+        return active_records[0]
+
+    def _prompt_field_diff(
+        self,
+        field: str,
+        base: PromptTemplateRecord,
+        target: PromptTemplateRecord,
+    ) -> dict[str, Any]:
+        base_value = str(getattr(base.prompts, field))
+        target_value = str(getattr(target.prompts, field))
+        return {
+            "field": field,
+            "changed": base_value != target_value,
+            "base": {
+                "revision": base.revision,
+                "length": len(base_value),
+                "sha256_12": _prompt_hash(base_value),
+            },
+            "target": {
+                "revision": target.revision,
+                "length": len(target_value),
+                "sha256_12": _prompt_hash(target_value),
+            },
+            "length_delta": len(target_value) - len(base_value),
+        }
 
 
 class MetricsService:
@@ -314,3 +527,11 @@ def _config_file(storage_root: str | Path | None) -> Path | None:
     root = Path(storage_root) / "state"
     root.mkdir(parents=True, exist_ok=True)
     return root / "runtime_config.json"
+
+
+def _prompt_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def _prompt_issue(code: str, message: str, **details: Any) -> dict[str, Any]:
+    return {"code": code, "message": message, "details": details}
