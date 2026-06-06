@@ -91,7 +91,7 @@
 - `Knowledge Domain Manager` 管理不同租户、行业下的知识域。
 - `Real-time Business Data Provider` 通过业务工具插件读取动态数据。
 - `Response Enhancement Orchestrator` 统一做引用、风格、脱敏和结构化输出后处理。
-- `RAG Eval` 不进入在线热路径，作为离线脚本验证 route、引用关键词、有效命中、引用准确率、拒答准确率和启发式 faithfulness 分数。
+- `RAG Eval` 不进入在线热路径，作为离线脚本验证 route、引用关键词、上下文 precision/recall、有效命中、引用准确率、拒答准确率和启发式 faithfulness 分数。
 
 ### 4.5 插件平台层
 
@@ -122,7 +122,7 @@
 
 1. `examples/interview_demo.py` 使用本地临时存储和默认 provider 启动 TestClient。
 2. 依次演示知识问答、重复知识问答缓存命中、业务工具查询、风险转人工、队列认领、成本摘要。
-3. `scripts/eval_rag.py` 使用本地标注 eval cases 验证 route、引用关键词、有效命中率、cohort、人工复核状态、引用准确率、拒答准确率、faithfulness 分数、`offline_accuracy` 和失败明细。
+3. `scripts/eval_rag.py` 使用本地标注 eval cases 验证 route、引用关键词、上下文 precision/recall、有效命中率、cohort、人工复核状态、引用准确率、拒答准确率、faithfulness 分数、`offline_accuracy` 和失败明细。
 4. `scripts/eval_online_rag.py` 可读取脱敏线上 JSON/JSONL 标注样本并输出样本级 `online_accuracy`。
 5. `scripts/check_external_readiness.py` 检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性；未配置时返回 `skipped`。
 6. `deploy/k6-smoke.js` 提供健康检查与指标摘要接口的 k6 smoke 模板。

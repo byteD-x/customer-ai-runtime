@@ -104,4 +104,4 @@
 - 同一租户可装配多个行业插件，但单次请求只使用一个主行业上下文。
 - 实时业务数据不得写入通用知识库代替实时查询。
 - 低成本治理不能牺牲业务正确性：只缓存安全知识问答，不缓存订单、物流、售后、账号、工单等实时查询。
-- RAG eval 只用于本地标注样例和脱敏输入样本回归，应同时检查 dataset、cohort、人工复核状态、route、引用关键词、有效命中、拒答期望、引用准确率和 faithfulness 分数；不能把本地 `offline_accuracy` 或样本级 `online_accuracy` 写成全量线上准确率。
+- RAG eval 只用于本地标注样例和脱敏输入样本回归，应同时检查 dataset、cohort、人工复核状态、route、引用关键词、上下文 precision/recall、有效命中、拒答期望、引用准确率和 faithfulness 分数；不能把本地 `offline_accuracy` 或样本级 `online_accuracy` 写成全量线上准确率。

@@ -45,7 +45,7 @@
 - LLM usage / cache hit / estimated cost 记录、`usage_source`、`billing_currency`、`billing_period`、`tenant_budget_estimated_cents` 与成本摘要接口
 - 可配置模型价格表，用于按 provider / model 估算本轮调用成本
 - 知识问答安全缓存与业务查询不缓存策略
-- RAG eval 8 个本地标注 cases、多知识库样例、cohort、人工复核状态、`offline_accuracy`、`citation_accuracy`、`refusal_accuracy`、`faithfulness_score`、评测脚本与失败明细
+- RAG eval 8 个本地标注 cases、多知识库样例、cohort、人工复核状态、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score`、评测脚本与失败明细
 - 结构化 `handoff_package`：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文与行为信号
 - 单进程人工接管队列、技能组、优先级排序、`queue_backend` / `atomic_claim` / `consistency_scope` 返回字段和 `claim-next`
 - OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖外部 readiness 脚本，缺少配置时返回 `skipped`
@@ -66,7 +66,7 @@
 - 宿主鉴权桥接涉及安全边界，必须避免把未验证的 Token 直接当可信身份。
 - 插件化改造会影响现有路由、工具和人工协同主链路，需通过回归测试兜底。
 - 当前默认本地 ASR/TTS 仍主要用于开发验证；真实生产音频能力依赖外部提供商配置。
-- 当前 RAG eval 是本地标注样例，包含 cohort、人工复核状态、`offline_accuracy`、引用准确率、拒答准确率和 faithfulness 分数；online eval 只代表输入的脱敏样本，不代表全量线上准确率。
+- 当前 RAG eval 是本地标注样例，包含 cohort、人工复核状态、`offline_accuracy`、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 分数；online eval 只代表输入的脱敏样本，不代表全量线上准确率。
 - 当前成本支持本地模型价格表估算，并显式返回 usage 来源、币种、账期和本地预算阈值；真实账单结算仍需要接入 provider 原生 usage、租户预算、币种和结算周期。
 - 当前人工接管队列默认 `local` 后端，`atomic_claim=true` 仅表示单进程锁内认领，`consistency_scope=single_process` 明确当前一致性边界；多实例原子认领是 future target。
 - 当前 readiness 脚本在缺少外部配置时返回 `skipped`，不能据此声明外部联调通过或失败；k6 smoke 模板未运行真实压测前不能声明生产 SLA。

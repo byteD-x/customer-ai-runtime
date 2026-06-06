@@ -33,7 +33,7 @@
 - **知识版本管理** - 支持版本快照、激活切换与回滚，检索与引用按激活版本隔离
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
 - **低成本治理** - 文本链路记录 LLM token、usage 来源、币种、账期、可配置模型价格估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存
-- **可复现 RAG 评测** - 提供 8 个本地标注 eval cases 与脚本，覆盖多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、有效命中率和失败明细
+- **可复现 RAG 评测** - 提供 8 个本地标注 eval cases 与脚本，覆盖多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、上下文 precision/recall、有效命中率和失败明细
 - **人工接管队列** - 基于 Session 的单实例本地队列，支持技能组、优先级、等待时间排序和单进程原子 claim-next 认领
 - **受控 Agent 工具流** - 支持白名单工具顺序编排、步骤上限、失败停止和 HTTP trace 返回，默认仅 `admin` / `operator` 可调用
 
@@ -239,7 +239,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1
 # 本地质量门禁：ruff、format check、compileall、mypy、pytest
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
-# RAG 质量评测：route、引用关键词、有效命中率、失败明细（JSON 输出）
+# RAG 质量评测：route、引用关键词、上下文 precision/recall、有效命中率、失败明细（JSON 输出）
 .venv\Scripts\python.exe scripts\eval_rag.py --json
 
 # 外部联调 readiness：未配置凭据时返回 skipped，不宣称真实联调通过
@@ -254,7 +254,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
 ```
 
-当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。`check_external_readiness.py` 会检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性，未配置时返回 `skipped`；只有真实凭据、网络和外部系统可达时才能声明对应联调通过。`eval_online_rag.py` 只基于你提供的脱敏线上标注样本计算 `online_accuracy`，没有样本时不代表线上准确率。上述结果只代表当前本地样例或输入样本，不代表真实成本节省、外部 provider 端到端联调结果或生产 SLA。
+当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。RAG eval 中的 `context_precision` / `context_recall` 是基于本地标注关键词和返回引用文本的启发式离线指标，用于暴露额外无关引用或上下文遗漏，不代表线上真实检索精度。`check_external_readiness.py` 会检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性，未配置时返回 `skipped`；只有真实凭据、网络和外部系统可达时才能声明对应联调通过。`eval_online_rag.py` 只基于你提供的脱敏线上标注样本计算 `online_accuracy`，没有样本时不代表线上准确率。上述结果只代表当前本地样例或输入样本，不代表真实成本节省、外部 provider 端到端联调结果或生产 SLA。
 
 ## 插件扩展
 

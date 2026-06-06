@@ -70,6 +70,10 @@
         "refund policy",
         "seven day no reason refund"
       ],
+      "expected_context_keywords": [
+        "refund policy",
+        "seven day no reason refund"
+      ],
       "min_score": 0.18,
       "expect_effective_hit": true
     },
@@ -88,6 +92,10 @@
       "expected_citation_keywords": [
         "24 hours"
       ],
+      "expected_context_keywords": [
+        "Support response SLA",
+        "24 hours"
+      ],
       "min_score": 0.18,
       "expect_effective_hit": true
     },
@@ -104,6 +112,10 @@
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
       "expected_citation_keywords": [
+        "order id",
+        "payment proof"
+      ],
+      "expected_context_keywords": [
         "order id",
         "payment proof"
       ],
@@ -158,6 +170,10 @@
         "SCIM provisioning",
         "15 minutes"
       ],
+      "expected_context_keywords": [
+        "SCIM provisioning",
+        "15 minutes"
+      ],
       "min_score": 0.18,
       "expect_effective_hit": true
     },
@@ -177,6 +193,10 @@
         "Audit log export",
         "180 days"
       ],
+      "expected_context_keywords": [
+        "Audit log export",
+        "180 days"
+      ],
       "min_score": 0.18,
       "expect_effective_hit": true
     },
@@ -193,6 +213,11 @@
       "knowledge_base_id": "kb_support",
       "expected_route": "knowledge",
       "expected_citation_keywords": [
+        "negative feedback",
+        "session id",
+        "refund request"
+      ],
+      "expected_context_keywords": [
         "negative feedback",
         "session id",
         "refund request"

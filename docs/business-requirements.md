@@ -119,7 +119,7 @@
 - 会话检索
 - 指标分析
 - 成本摘要：provider、route、token、usage 来源、币种、账期、本地预算阈值、基于本地模型价格表的估算成本、缓存命中
-- RAG eval：dataset、cohort、人工复核状态、route、引用关键词、有效命中、引用准确率、拒答准确率、faithfulness 分数、`offline_accuracy`、失败明细
+- RAG eval：dataset、cohort、人工复核状态、route、引用关键词、上下文 precision/recall、有效命中、引用准确率、拒答准确率、faithfulness 分数、`offline_accuracy`、失败明细
 - 故障排查
 - 灰度与回滚
 
@@ -182,7 +182,7 @@
 - RTC 轮次成功率：单轮通话从音频输入到音频回推的成功比例
 - 知识问答缓存命中率：知识类请求中命中安全缓存的比例
 - 单轮估算成本：按 provider / route 聚合 token、usage 来源、币种、账期、本地预算阈值与估算成本
-- RAG eval 通过率 / `offline_accuracy`：本地标注 case 中 route、引用关键词、有效命中、拒答期望和 faithfulness 门禁均通过的比例
+- RAG eval 通过率 / `offline_accuracy`：本地标注 case 中 route、引用关键词、有效命中、拒答期望和 faithfulness 门禁均通过的比例；`context_precision` / `context_recall` 作为本地启发式报告指标，用于观察额外无关引用和上下文遗漏
 - 人工接管等待时长：按技能组统计 waiting_human 到 claim-next 的等待时间；当前 `atomic_claim` 只代表单进程锁内认领，`consistency_scope=single_process` 明确一致性边界
 
 ## 8. 最小安全模型

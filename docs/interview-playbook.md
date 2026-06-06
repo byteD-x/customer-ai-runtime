@@ -38,10 +38,10 @@
 
 - 新增 8 个本地标注 eval cases，评估 route 是否正确、citation 是否包含期望关键词、citation score 是否达到有效命中阈值。
 - eval payload 支持多知识库播种，当前覆盖 `kb_support` 和 `kb_saas`，包含行业术语和反馈回放样例。
-- eval payload 带 `dataset_id`、`cohort`、`review_status` 和 `label`，汇总输出 `reviewed_case_count`、`offline_accuracy`、`citation_accuracy`、`refusal_accuracy`、`faithfulness_score` 与 `cohort_breakdown`。
+- eval payload 带 `dataset_id`、`cohort`、`review_status` 和 `label`，汇总输出 `reviewed_case_count`、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score` 与 `cohort_breakdown`。
 - Chat 知识回复会输出引用来源字段，并在无有效引用时返回 `refusal=true` 和 `hallucination_check`，避免无证据强答。
 - `low_score_miss` 用例用于证明“低分不算有效命中”，避免把兜底引用包装成准确命中。
-- 失败明细包含 missing keywords、route mismatch、effective hit mismatch，可直接指导补文档、调切片或调阈值。
+- 失败明细包含 missing keywords、missing context keywords、route mismatch、effective hit mismatch，可直接指导补文档、调切片或调阈值。
 
 **代码证据**
 
@@ -60,10 +60,10 @@
 **面试官可能追问**
 
 - 问：为什么不直接说准确率多少？
-- 答：当前仓库没有全量线上标注集和真实灰度流量，只能给可复现的本地标注样例结果；`offline_accuracy` 只表示这些本地 labeled cases 的通过率，`online_accuracy` 只表示手动导入的脱敏样本。线上准确率必须基于业务标注集、灰度数据和人工复核，不能凭 demo case 虚构。
+- 答：当前仓库没有全量线上标注集和真实灰度流量，只能给可复现的本地标注样例结果；`offline_accuracy` 只表示这些本地 labeled cases 的通过率，`context_precision` / `context_recall` 只表示本地标注关键词与返回引用文本的启发式匹配，`online_accuracy` 只表示手动导入的脱敏样本。线上准确率必须基于业务标注集、灰度数据和人工复核，不能凭 demo case 虚构。
 
 - 问：评测失败后怎么优化？
-- 答：先看失败类型：route 错就调整路由策略或上下文信号；citation keyword 缺失就补知识、改切片；effective hit 低就调 embedding、召回 top_k、min_score 或切片参数。
+- 答：先看失败类型：route 错就调整路由策略或上下文信号；citation keyword 或 context keyword 缺失就补知识、改切片；context precision 低说明返回了额外无关引用；effective hit 低就调 embedding、召回 top_k、min_score 或切片参数。
 
 ## 3. 人工接管队列：为什么不是简单“转人工”？
 
@@ -102,7 +102,7 @@
 3. 业务查询：输出 `route=business` 和 `tool_result`，证明实时工具链路不走缓存。
 4. 风险问题：输出 `handoff_package`，进入 `handoff_queue`，再 `claim-next`。
 5. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期和按 route 聚合。
-6. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、拒答准确率、faithfulness 分数和 `offline_accuracy`。
+6. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`。
 7. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
 8. 外部 readiness：展示未配置外部凭据时 `overall_status=skipped`，强调不冒充真实联调通过。
 9. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
@@ -180,12 +180,12 @@ k6 run deploy\k6-smoke.js
 
 **解决方案**：
 
-- eval case 同时检查 route、引用关键词和 citation score，并覆盖多知识库、行业术语、反馈回放和低分未命中。
+- eval case 同时检查 route、引用关键词、上下文关键词和 citation score，并覆盖多知识库、行业术语、反馈回放和低分未命中。
 - case 带本地标注集元数据、cohort 和人工复核状态，汇总输出 `offline_accuracy` 与 cohort breakdown。
 - `expect_effective_hit=false` 用于验证低分未命中。
-- 失败明细暴露 `missing_keywords`、`route_ok`、`effective_hit_ok`、`citation_accuracy`、`refusal_ok` 和 `faithfulness_score`。
+- 失败明细暴露 `missing_keywords`、`missing_context_keywords`、`route_ok`、`effective_hit_ok`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_ok` 和 `faithfulness_score`。
 
-**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、标注样例字段、人工复核计数和 `offline_accuracy`。
+**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数和 `offline_accuracy`。
 
 ### 难点 3：转人工要能被运营侧消费
 
@@ -226,7 +226,7 @@ k6 run deploy\k6-smoke.js
 
 - **S**：RAG demo 容易只展示成功样例，无法解释引用缺失和低分召回。
 - **T**：建立本地可复现 eval，证明评测机制而非虚构准确率。
-- **A**：设计 8 个带 dataset、cohort、review_status 和 label 的 eval cases，检查 route、引用关键词、有效命中阈值、拒答期望和 faithfulness 分数，输出失败明细，并覆盖多知识库与反馈回放。
+- **A**：设计 8 个带 dataset、cohort、review_status 和 label 的 eval cases，检查 route、引用关键词、上下文 precision/recall、有效命中阈值、拒答期望和 faithfulness 分数，输出失败明细，并覆盖多知识库与反馈回放。
 - **R**：`scripts/eval_rag.py` 可本地复跑，当前本地标注样例通过；线上准确率需业务标注集。
 
 ### STAR：人工接管队列

@@ -16,6 +16,8 @@ def evaluate_rag_results(
     reviewed_count = 0
     cohort_stats: dict[str, dict[str, int]] = {}
     citation_accuracy_values: list[float] = []
+    context_precision_values: list[float] = []
+    context_recall_values: list[float] = []
     refusal_checked_count = 0
     refusal_passed_count = 0
     faithfulness_scores: list[float] = []
@@ -33,11 +35,24 @@ def evaluate_rag_results(
         expected_citation_keywords = [
             str(keyword) for keyword in case.get("expected_citation_keywords", [])
         ]
+        expected_context_keywords = _expected_context_keywords(
+            case,
+            fallback_keywords=expected_citation_keywords,
+        )
         missing_keywords = _missing_citation_keywords(
             citations,
             expected_citation_keywords,
         )
+        missing_context_keywords = _missing_citation_keywords(
+            citations,
+            expected_context_keywords,
+        )
         citation_accuracy = _citation_accuracy(missing_keywords, expected_citation_keywords)
+        context_recall = _citation_accuracy(
+            missing_context_keywords,
+            expected_context_keywords,
+        )
+        context_precision = _context_precision(citations, expected_context_keywords)
         expected_refusal = _expects_refusal(case)
         actual_refusal = _is_refusal(result)
         refusal_ok = actual_refusal == expected_refusal if expected_refusal is not None else None
@@ -53,6 +68,10 @@ def evaluate_rag_results(
             effective_hits += 1
         if citation_accuracy is not None:
             citation_accuracy_values.append(citation_accuracy)
+        if context_precision is not None:
+            context_precision_values.append(context_precision)
+        if context_recall is not None:
+            context_recall_values.append(context_recall)
         if refusal_ok is not None:
             refusal_checked_count += 1
             refusal_passed_count += 1 if refusal_ok else 0
@@ -106,6 +125,10 @@ def evaluate_rag_results(
             "missing_keywords": missing_keywords,
             "keywords_ok": keywords_ok,
             "citation_accuracy": citation_accuracy,
+            "expected_context_keywords": expected_context_keywords,
+            "missing_context_keywords": missing_context_keywords,
+            "context_precision": context_precision,
+            "context_recall": context_recall,
             "expected_refusal": expected_refusal,
             "actual_refusal": actual_refusal,
             "refusal_ok": refusal_ok,
@@ -127,6 +150,8 @@ def evaluate_rag_results(
             "pass_rate": 0.0 if case_count == 0 else round(passed_count / case_count, 4),
             "effective_hit_rate": 0.0 if case_count == 0 else round(effective_hits / case_count, 4),
             "citation_accuracy": _average(citation_accuracy_values),
+            "context_precision": _average(context_precision_values),
+            "context_recall": _average(context_recall_values),
             "refusal_accuracy": 0.0
             if refusal_checked_count == 0
             else round(refusal_passed_count / refusal_checked_count, 4),
@@ -175,6 +200,41 @@ def _missing_citation_keywords(
         for keyword in expected_keywords
         if keyword.strip() and keyword.strip().lower() not in citation_text
     ]
+
+
+def _expected_context_keywords(
+    case: dict[str, Any],
+    *,
+    fallback_keywords: list[str],
+) -> list[str]:
+    raw_keywords = case.get("expected_context_keywords")
+    if not isinstance(raw_keywords, list):
+        return list(fallback_keywords)
+    return [str(keyword) for keyword in raw_keywords]
+
+
+def _context_precision(
+    citations: list[dict[str, Any]],
+    expected_keywords: list[str],
+) -> float | None:
+    normalized = [keyword.strip().lower() for keyword in expected_keywords if keyword.strip()]
+    if not normalized:
+        return None
+    if not citations:
+        return 0.0
+    relevant_count = 0
+    for citation in citations:
+        citation_text = _citation_text(citation)
+        if any(keyword in citation_text for keyword in normalized):
+            relevant_count += 1
+    return round(relevant_count / len(citations), 4)
+
+
+def _citation_text(citation: dict[str, Any]) -> str:
+    return " ".join(
+        str(citation.get(field) or "")
+        for field in ("title", "excerpt", "content", "source", "source_url")
+    ).lower()
 
 
 def _citation_accuracy(

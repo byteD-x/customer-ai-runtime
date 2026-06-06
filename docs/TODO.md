@@ -15,7 +15,7 @@
 - 成本治理：LLM usage、usage 来源、币种、账期、本地预算阈值、可配置模型价格表、知识问答安全缓存、业务查询不缓存、成本摘要
 - LLM 接入治理：模型覆盖、结构化 schema、Prompt 版本历史与 prompt hash 缓存隔离
 - Prompt 回滚 API：指定 revision 回滚并生成新的激活版本记录
-- RAG eval：8 个本地标注 case、多知识库样例、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用准确率、拒答准确率、faithfulness 分数、失败明细、可复现脚本
+- RAG eval：8 个本地标注 case、多知识库样例、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数、失败明细、可复现脚本
 - RAG 文件上传解析：文本 / Markdown 已可走上传入口，PDF / Word 依赖 `providers` extra
 - AgentWorkflow HTTP API：顺序工具步骤、工具白名单、步骤上限、失败停止与 trace
 - 结构化交接包：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号

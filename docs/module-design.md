@@ -156,7 +156,7 @@
 - 知识问答在无宿主敏感上下文、存在引用、知识版本和 prompt hash 受控时可进入安全缓存
 - `RetrievalService` 负责对检索结果做轻量 rerank，并把 `source`、`source_url`、`page` 和 `metadata` 透传到 `Citation`
 - `HallucinationCheckService` 对知识型回复执行启发式证据门禁；缺少有效引用或证据重叠不足时返回拒答字段，避免无证据强答
-- `scripts/eval_rag.py` 通过本地可复现 API 链路评估 route、引用关键词、有效命中阈值、标注集元数据、cohort、人工复核状态、`citation_accuracy`、`refusal_accuracy`、`faithfulness_score`、`offline_accuracy` 和失败明细
+- `scripts/eval_rag.py` 通过本地可复现 API 链路评估 route、引用关键词、上下文 precision/recall、有效命中阈值、标注集元数据、cohort、人工复核状态、`citation_accuracy`、`refusal_accuracy`、`faithfulness_score`、`offline_accuracy` 和失败明细
 - `scripts/eval_online_rag.py` 读取脱敏 JSON/JSONL 样本，输出样本级 `online_accuracy`
 
 ## 6. 业务工具模块
@@ -374,5 +374,5 @@
 - 当前交付以单体参考实现为主。
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
 - 当前人工接管队列是基于 `Session` 的单实例轻量队列；`queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 仅表示单进程锁内认领边界，Redis sorted set / 数据库事务认领属于 future target。
-- 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态、引用准确率、拒答准确率、faithfulness 分数和 `offline_accuracy`；online eval 只代表输入样本，不代表全量线上准确率。
+- 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`；online eval 只代表输入样本，不代表全量线上准确率。
 - 当前成本治理是本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值，不代表真实 provider 账单或线上节省比例。

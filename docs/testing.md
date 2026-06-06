@@ -110,7 +110,7 @@ python -m compileall -q src tests
 - 业务工具查询必须保持 `cache_hit=false`，避免缓存实时订单/售后状态
 - 成本摘要应按 provider、route 聚合 token、usage 来源、币种、账期、本地预算阈值、基于本地模型价格表的估算成本和缓存命中
 - 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领，并返回 `queue_backend` / `atomic_claim` / `consistency_scope` 当前后端口径
-- RAG eval 应覆盖 8 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细、`citation_accuracy`、`refusal_accuracy` 和 `faithfulness_score`
+- RAG eval 应覆盖 8 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy` 和 `faithfulness_score`
 - Chat 知识回复缺少有效引用时应返回 `refusal=true`、`refusal_reason`、空 `citations` / `references`，避免无证据强答
 - 外部 readiness 脚本在缺少 OpenAI / OpenAI Admin / Qdrant / 业务 API / 工单 API / Redis / Postgres 配置时应返回 `skipped`，配置后按真实 HTTP/TCP 探针返回 `passed` 或 `failed`
 - 线上 RAG 评估脚本只读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`，不能在缺少样本时宣称线上准确率
@@ -125,7 +125,7 @@ python -m compileall -q src tests
 - 若未配置真实 OpenAI / Qdrant / 外部业务系统，只能验证本地默认提供商链路，不能宣称外部联调已通过。
 - `scripts/check_external_readiness.py` 只检查可选外部依赖配置、可达性和部分权限探针；未配置时为 `skipped`，不代表外部联调失败或通过。
 - `deploy/k6-smoke.js` 是压测模板；未运行真实压测并保留输出前，不能声明 QPS、p95/p99 或 SLA。
-- `scripts/eval_rag.py` 使用本地 provider 与临时存储，验证的是可重复的本地标注样例离线评测闭环，不代表线上准确率。
+- `scripts/eval_rag.py` 使用本地 provider 与临时存储，验证的是可重复的本地标注样例离线评测闭环；其中 `context_precision` / `context_recall` 基于本地标注关键词和返回引用文本启发式计算，用于暴露额外无关引用或上下文遗漏，不代表线上准确率。
 - `scripts/eval_online_rag.py` 需要真实业务导出的脱敏标注样本；输出只代表该输入样本，不自动代表全量线上准确率。
 - 当前成本为本地模型价格表估算，不代表真实 provider 账单或线上节省比例。
 - `examples/interview_demo.py` 是面试演示脚本，用于串起本地闭环，不代表生产压测结果。

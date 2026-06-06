@@ -146,5 +146,5 @@ class IndustryAdapterPlugin(Plugin):
 ## 9. 与评测和运营的关系
 
 - 业务适配器负责实时数据，不参与 RAG eval 的引用命中判断。
-- RAG eval 主要评估本地标注样例中的知识路由、引用关键词、有效命中、cohort 和人工复核状态；业务工具链路应通过集成测试、readiness 脚本或外部系统联调验证。
+- RAG eval 主要评估本地标注样例中的知识路由、引用关键词、上下文 precision/recall、有效命中、cohort 和人工复核状态；业务工具链路应通过集成测试、readiness 脚本或外部系统联调验证。
 - 成本摘要当前来自 Chat 诊断事件；真实业务 API 成本、客服工单成本和外部调用账单属于 future target。

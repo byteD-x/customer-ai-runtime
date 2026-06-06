@@ -40,10 +40,15 @@ def test_rag_eval_reports_citation_keyword_failures() -> None:
     assert report["summary"]["reviewed_case_count"] == 0
     assert report["summary"]["offline_accuracy"] == 0.0
     assert report["summary"]["citation_accuracy"] == 0.0
+    assert report["summary"]["context_precision"] == 0.0
+    assert report["summary"]["context_recall"] == 0.0
     assert report["failures"][0]["missing_keywords"] == ["seven day no reason refund"]
+    assert report["failures"][0]["missing_context_keywords"] == ["seven day no reason refund"]
     assert report["failures"][0]["route_ok"] is True
     assert report["failures"][0]["effective_hit_ok"] is True
     assert report["failures"][0]["citation_accuracy"] == 0.0
+    assert report["failures"][0]["context_precision"] == 0.0
+    assert report["failures"][0]["context_recall"] == 0.0
 
 
 def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
@@ -129,6 +134,8 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
     assert report["summary"]["reviewed_case_count"] == 4
     assert report["summary"]["offline_accuracy"] == 1.0
     assert report["summary"]["citation_accuracy"] == 1.0
+    assert report["summary"]["context_precision"] == 1.0
+    assert report["summary"]["context_recall"] == 1.0
     assert report["summary"]["refusal_accuracy"] == 1.0
     assert report["summary"]["refusal_case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["support_baseline"]["case_count"] == 1
@@ -140,9 +147,39 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
     assert unrelated_case["expected_refusal"] is True
     assert unrelated_case["actual_refusal"] is True
     assert unrelated_case["refusal_ok"] is True
+    assert unrelated_case["expected_context_keywords"] == []
+    assert unrelated_case["context_precision"] is None
+    assert unrelated_case["context_recall"] is None
     assert unrelated_case["dataset_id"] == "local_interview_v1"
     assert unrelated_case["cohort"] == "negative_control"
     assert unrelated_case["review_status"] == "reviewed"
+
+    feedback_case = next(case for case in cases if case["case_id"] == "feedback_replay_refund_hit")
+    noisy_feedback_report = evaluate_rag_results(
+        [feedback_case],
+        [
+            {
+                "case_id": "feedback_replay_refund_hit",
+                "route": "knowledge",
+                "citations": [
+                    {
+                        "title": "feedback replay",
+                        "excerpt": (
+                            "Replay negative feedback with the session id and refund request."
+                        ),
+                        "score": 0.4,
+                    },
+                    {
+                        "title": "refund policy",
+                        "excerpt": "Keep order id and payment proof for account verification.",
+                        "score": 0.39,
+                    },
+                ],
+            }
+        ],
+    )
+    assert noisy_feedback_report["summary"]["context_precision"] == 0.5
+    assert noisy_feedback_report["summary"]["context_recall"] == 1.0
 
 
 def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
@@ -164,6 +201,8 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert result["cost_summary"]["cache_hits"] >= 1
     assert result["rag_eval_summary"]["failed"] == 0
     assert result["rag_eval_summary"]["offline_accuracy"] == 1.0
+    assert result["rag_eval_summary"]["context_precision"] == 0.9167
+    assert result["rag_eval_summary"]["context_recall"] == 1.0
     assert result["rag_eval_summary"]["reviewed_case_count"] == 8
 
 
