@@ -46,12 +46,14 @@ SUITE_TARGETS = {
         "tests/test_rate_limit_subject.py",
     ),
     "external": ("tests/test_external_readiness_and_online_eval.py",),
+    "runner": ("tests/test_pytest_group_runner.py",),
     "selector": ("tests/test_select_fast_tests.py",),
     "full": ("tests",),
 }
 
 SUITE_ORDER = (
     "selector",
+    "runner",
     "stream",
     "api",
     "costs",
@@ -110,6 +112,9 @@ def select_targets(changed_paths: Iterable[str]) -> FastTestSelection:
             continue
         if path in {"scripts/select_fast_tests.py", "scripts/test-fast.ps1"}:
             suites.add("selector")
+            continue
+        if path.startswith("scripts/quality/"):
+            suites.add("runner")
             continue
         if path == "scripts/eval_rag.py" or path.startswith("examples/"):
             suites.add("rag")

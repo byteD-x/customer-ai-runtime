@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("auto", "stream", "api", "costs", "handoff", "rag", "agent", "providers", "smoke", "external", "selector", "full")]
+    [ValidateSet("auto", "stream", "api", "costs", "handoff", "rag", "agent", "providers", "smoke", "external", "runner", "selector", "full")]
     [string] $Suite = "stream",
 
     [string[]] $Target = @(),
@@ -89,6 +89,9 @@ function Resolve-PytestArgs {
             }
             "external" {
                 $pytestArgs += "tests/test_external_readiness_and_online_eval.py"
+            }
+            "runner" {
+                $pytestArgs += "tests/test_pytest_group_runner.py"
             }
             "selector" {
                 $pytestArgs += "tests/test_select_fast_tests.py"

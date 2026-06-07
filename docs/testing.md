@@ -66,8 +66,15 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite selector
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite external
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite rag
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite runner
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_admin_prompt_revisions_return_safe_metadata,tests\test_runtime_api.py::test_admin_prompt_diff_compares_active_revision_with_target"
+# 长测试分组诊断：每组独立日志，支持 heartbeat、总超时、idle timeout 和失败日志尾部
+.venv\Scripts\python.exe scripts\quality\run_pytest_groups.py `
+  --group selector=tests/test_select_fast_tests.py `
+  --group api=tests/test_runtime_api.py `
+  --idle-timeout-seconds 60 `
+  --tail-lines-on-failure 60
 # 完整本地质量门禁
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe -m pytest
@@ -100,10 +107,13 @@ python -m compileall -q src tests
 - `costs`：成本治理目标测试，覆盖知识缓存、模型价格表、租户成本策略和 provider billing 样本导入。
 - `smoke`：插件、路由、回复后处理和限流主体等低成本冒烟测试。
 - `external`：外部 readiness 与线上 RAG 样本评估入口测试。
+- `runner`：分组 pytest runner 自身测试。
 - `selector`：快速测试选择器自身测试。
 - `full`：完整 `pytest tests`，用于显式回退验证。
 
 脚本默认使用 `.venv\Scripts\python.exe`，如果不存在则退回 `python`；默认超时为 120 秒，可用 `-TimeoutSeconds` 调整。若超时，脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr，便于定位卡住点。`auto` 只优化开发反馈速度，提交前仍需运行 `scripts/test.ps1`。
+
+`scripts/quality/run_pytest_groups.py` 用于把较长 pytest 任务拆成命名分组，例如 `--group api=tests/test_runtime_api.py`。每组会独立写入 stdout/stderr 日志，heartbeat 输出日志字节数和 idle 秒数；`--idle-timeout-seconds` 可在日志长期无变化时终止卡住分组，`--tail-lines-on-failure` 控制失败或超时时打印的日志尾部行数。该工具用于长测试诊断和失败定位，不替代完整门禁。
 
 ## 5. 验收重点
 

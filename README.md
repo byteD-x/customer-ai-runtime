@@ -338,6 +338,13 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite providers
 # 直接跑某个 pytest node，脚本会自动使用 .venv Python 并设置超时
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
 
+# 长测试分组诊断：每组独立日志，支持 heartbeat、总超时、idle timeout 和失败日志尾部
+.venv\Scripts\python.exe scripts\quality\run_pytest_groups.py `
+  --group selector=tests/test_select_fast_tests.py `
+  --group api=tests/test_runtime_api.py `
+  --idle-timeout-seconds 60 `
+  --tail-lines-on-failure 60
+
 # 提交前完整本地门禁
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
@@ -346,6 +353,8 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 ```
 
 `scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。`-Suite auto` 会基于当前 `git status` 自动选择最小 pytest 目标，包括未跟踪的新文件；当多个 suite 同时选中时，会剪掉已被整文件或目录目标覆盖的 nodeid，避免重复收集；无法安全归类的运行时代码、依赖、CI 或门禁脚本变更会回退到完整 `pytest tests`。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
+
+`scripts/quality/run_pytest_groups.py` 用于把较长 pytest 任务拆成命名分组并定位卡住或失败的分组；每组保留 stdout/stderr 日志，heartbeat 输出日志字节数与 idle 秒数，失败或超时时只打印有限尾部。该工具用于提速排障，不替代提交前的完整 `scripts/test.ps1`。
 
 人工接管队列默认使用 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`；需要验证共享队列表事务认领时可设置为 `sqlite`，队列文件位于 `<storage_root>/state/handoff_queue.sqlite3`。该后端只覆盖人工接管队列的入队与 `claim-next` 认领，不代表 Session JSON 仓储已经具备完整多实例强一致能力。
 

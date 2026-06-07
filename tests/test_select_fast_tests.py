@@ -118,6 +118,13 @@ def test_selector_script_change_selects_selector_suite() -> None:
     assert selection.targets == ("tests/test_select_fast_tests.py",)
 
 
+def test_pytest_group_runner_change_selects_runner_suite() -> None:
+    selection = select_targets(["scripts/quality/run_pytest_groups.py"])
+
+    assert selection.suites == ("runner",)
+    assert selection.targets == ("tests/test_pytest_group_runner.py",)
+
+
 def test_empty_change_set_falls_back_to_full_pytest() -> None:
     selection = select_targets([])
 
