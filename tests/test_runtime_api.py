@@ -1501,6 +1501,19 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
         None if expected_cost == 0 else round(expected_variance / expected_cost, 6)
     )
     assert summary_data["cost_reconciliation"]["has_provider_billing_sample"] is True
+    assert (
+        summary_data["usage_reconciliation"]["runtime_total_tokens"]
+        == chat_data["usage"]["total_tokens"]
+    )
+    assert summary_data["usage_reconciliation"]["provider_total_tokens"] == 1734
+    assert summary_data["usage_reconciliation"]["usage_variance_tokens"] == (
+        1734 - chat_data["usage"]["total_tokens"]
+    )
+    assert summary_data["usage_reconciliation"]["matched_record_count"] == 0
+    assert summary_data["usage_reconciliation"]["unmatched_provider_record_count"] == 2
+    assert summary_data["usage_reconciliation"]["unmatched_runtime_record_count"] == 1
+    assert summary_data["usage_reconciliation"]["weak_attribution_provider_record_count"] == 1
+    assert summary_data["usage_reconciliation"]["has_provider_billing_sample"] is True
     assert summary_data["cost_source_counts"]["runtime_estimate"] == 1
     assert summary_data["cost_source_counts"]["provider_billing"] == 2
     assert summary_data["usage_source_counts"]["provider_billing"] == 2
@@ -1524,6 +1537,62 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
     assert len(diagnostics_data) == 2
     assert diagnostics_data[0]["code"] == "provider.billing_recorded"
     assert diagnostics_data[0]["context"]["cost_source"] == "provider_billing"
+
+
+def test_provider_billing_usage_reconciliation_matches_runtime_usage(
+    client: TestClient,
+) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "hello",
+        },
+    )
+    assert chat.status_code == 200
+    chat_data = chat.json()["data"]
+    runtime_tokens = chat_data["usage"]["total_tokens"]
+
+    imported = client.post(
+        "/api/v1/admin/costs/provider-billing-records",
+        headers=ADMIN_HEADERS,
+        json={
+            "records": [
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "local",
+                    "model": "local",
+                    "route": "knowledge",
+                    "session_id": chat_data["session_id"],
+                    "total_tokens": runtime_tokens + 7,
+                    "billed_cost_cents": 0.05,
+                    "billing_currency": "USD",
+                    "billing_period": "per_request",
+                    "external_record_id": "local_bill_001",
+                },
+            ]
+        },
+    )
+    assert imported.status_code == 200
+
+    summary = client.get(
+        "/api/v1/admin/costs/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    usage_reconciliation = summary.json()["data"]["usage_reconciliation"]
+    assert usage_reconciliation["runtime_total_tokens"] == runtime_tokens
+    assert usage_reconciliation["provider_total_tokens"] == runtime_tokens + 7
+    assert usage_reconciliation["usage_variance_tokens"] == 7
+    assert usage_reconciliation["usage_variance_ratio"] == round(7 / runtime_tokens, 6)
+    assert usage_reconciliation["matched_record_count"] == 1
+    assert usage_reconciliation["unmatched_provider_record_count"] == 0
+    assert usage_reconciliation["unmatched_runtime_record_count"] == 0
+    assert usage_reconciliation["weak_attribution_provider_record_count"] == 0
+    assert usage_reconciliation["has_provider_billing_sample"] is True
 
 
 def test_provider_billing_import_reports_quality_issues_without_blocking(

@@ -51,6 +51,7 @@ function Resolve-PytestArgs {
                     "tests/test_runtime_api.py::test_chat_cost_uses_configured_model_price_map",
                     "tests/test_runtime_api.py::test_chat_cost_uses_tenant_billing_policy",
                     "tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary",
+                    "tests/test_runtime_api.py::test_provider_billing_usage_reconciliation_matches_runtime_usage",
                     "tests/test_runtime_api.py::test_provider_billing_import_reports_quality_issues_without_blocking"
                 )
             }

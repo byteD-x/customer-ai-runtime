@@ -53,6 +53,75 @@ def _cost_reconciliation(
     }
 
 
+def _usage_reconciliation(
+    chat_events: list[Any],
+    billing_events: list[Any],
+) -> dict[str, Any]:
+    runtime_by_key: Counter[tuple[str, str, str, str]] = Counter()
+    runtime_record_counts: Counter[tuple[str, str, str, str]] = Counter()
+    provider_by_key: Counter[tuple[str, str, str, str]] = Counter()
+    runtime_total_tokens = 0
+    provider_total_tokens = 0
+    unmatched_runtime_without_key = 0
+    unmatched_provider_record_count = 0
+    matched_record_count = 0
+    weak_attribution_provider_record_count = 0
+
+    for event in chat_events:
+        context = event.context
+        tokens = int(context.get("total_tokens") or 0)
+        runtime_total_tokens += tokens
+        key = _usage_reconciliation_key(context)
+        if key is None:
+            unmatched_runtime_without_key += 1
+            continue
+        runtime_by_key[key] += tokens
+        runtime_record_counts[key] += 1
+
+    for event in billing_events:
+        context = event.context
+        tokens = int(context.get("total_tokens") or 0)
+        provider_total_tokens += tokens
+        key = _usage_reconciliation_key(context)
+        if key is None:
+            weak_attribution_provider_record_count += 1
+            unmatched_provider_record_count += 1
+            continue
+        provider_by_key[key] += tokens
+        if key in runtime_by_key:
+            matched_record_count += 1
+        else:
+            unmatched_provider_record_count += 1
+
+    unmatched_runtime_record_count = unmatched_runtime_without_key + sum(
+        runtime_record_counts[key] for key in runtime_by_key if key not in provider_by_key
+    )
+    variance = provider_total_tokens - runtime_total_tokens
+    return {
+        "runtime_total_tokens": runtime_total_tokens,
+        "provider_total_tokens": provider_total_tokens,
+        "usage_variance_tokens": variance,
+        "usage_variance_ratio": None
+        if runtime_total_tokens == 0
+        else round(variance / runtime_total_tokens, 6),
+        "matched_record_count": matched_record_count,
+        "unmatched_provider_record_count": unmatched_provider_record_count,
+        "unmatched_runtime_record_count": unmatched_runtime_record_count,
+        "weak_attribution_provider_record_count": weak_attribution_provider_record_count,
+        "has_provider_billing_sample": bool(billing_events),
+    }
+
+
+def _usage_reconciliation_key(context: dict[str, Any]) -> tuple[str, str, str, str] | None:
+    session_id = str(context.get("session_id") or "").strip()
+    if not session_id:
+        return None
+    tenant_id = str(context.get("tenant_id") or "").strip() or "unknown"
+    provider = str(context.get("provider") or "").strip() or "unknown"
+    model = str(context.get("model") or "").strip()
+    return (tenant_id, session_id, provider, model)
+
+
 def _parse_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
@@ -262,6 +331,7 @@ class AdminService:
             provider_billed_cost,
             has_provider_billing_sample=provider_billing_records > 0,
         )
+        usage_reconciliation = _usage_reconciliation(chat_events, billing_events)
         return {
             "tenant_id": tenant_id,
             "sample_size": request_count,
@@ -269,6 +339,7 @@ class AdminService:
             "estimated_cost_cents": round(total_cost, 6),
             "provider_billed_cost_cents": round(provider_billed_cost, 6),
             "cost_reconciliation": reconciliation,
+            "usage_reconciliation": usage_reconciliation,
             "cache_hits": cache_hits,
             "cache_hit_rate": 0.0 if request_count == 0 else round(cache_hits / request_count, 4),
             "budget_alerts": alert_count,

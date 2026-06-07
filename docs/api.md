@@ -384,7 +384,7 @@
 
 ### `GET /api/v1/admin/costs/summary`
 
-- 用途：汇总当前诊断样本中的 LLM token、估算成本、导入 provider billing 样本金额、诊断样本成本差异、缓存命中和预算告警
+- 用途：汇总当前诊断样本中的 LLM token、估算成本、导入 provider billing 样本金额、诊断样本成本差异、provider billing usage 对账诊断、缓存命中和预算告警
 - 权限：`admin` / `operator`
 - 可选查询参数：
   - `tenant_id`
@@ -394,6 +394,7 @@
   - `estimated_cost_cents`
   - `provider_billed_cost_cents`
   - `cost_reconciliation`
+  - `usage_reconciliation`
   - `cache_hits`
   - `cache_hit_rate`
   - `budget_alerts`
@@ -407,7 +408,7 @@
   - `by_provider`
   - `by_route`
 
-说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；`provider_billed_cost_cents` 只统计通过 provider billing 导入接口写入的样本金额，不会混入估算成本；`cost_reconciliation.variance_cents = provider_billed_cost_cents - estimated_cost_cents`，`variance_ratio` 在估算成本为 0 时返回 `null`；`by_provider` 与 `by_route` 中同步返回 `cost_variance_cents` 和 `cost_variance_ratio`。这些字段只用于导入样本后的诊断对账观察，`billing_currency`、`billing_period` 与 `tenant_budget_estimated_cents` 支持策略配置和租户级覆盖。自动拉取 provider 真实账单、账单系统结算和线上节省比例仍属于 future target。
+说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；`provider_billed_cost_cents` 只统计通过 provider billing 导入接口写入的样本金额，不会混入估算成本；`cost_reconciliation.variance_cents = provider_billed_cost_cents - estimated_cost_cents`，`variance_ratio` 在估算成本为 0 时返回 `null`；`by_provider` 与 `by_route` 中同步返回 `cost_variance_cents` 和 `cost_variance_ratio`。`usage_reconciliation` 按 `tenant_id + session_id + provider + model` 对运行时 usage 与导入 provider billing usage 做 token 对账诊断，返回 `runtime_total_tokens`、`provider_total_tokens`、`usage_variance_tokens`、`usage_variance_ratio`、强匹配记录数、未匹配 runtime/provider 记录数和弱归因 provider 样本数；没有 `session_id` 的导入样本只计入弱归因，不算强匹配。这些字段只用于导入样本后的诊断对账观察，`billing_currency`、`billing_period` 与 `tenant_budget_estimated_cents` 支持策略配置和租户级覆盖。自动拉取 provider 真实账单、账单系统结算和线上节省比例仍属于 future target。
 
 ### `POST /api/v1/admin/costs/provider-billing-records`
 
