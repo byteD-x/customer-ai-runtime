@@ -1416,6 +1416,7 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
         },
     )
     assert chat.status_code == 200
+    chat_data = chat.json()["data"]
 
     denied = client.post(
         "/api/v1/admin/costs/provider-billing-records",
@@ -1444,7 +1445,7 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
                     "provider": "openai",
                     "model": "gpt-4.1-mini",
                     "route": "knowledge",
-                    "session_id": chat.json()["data"]["session_id"],
+                    "session_id": chat_data["session_id"],
                     "total_tokens": 1234,
                     "billed_cost_cents": 12.5,
                     "billing_currency": "USD",
@@ -1480,17 +1481,30 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
     )
     assert summary.status_code == 200
     summary_data = summary.json()["data"]
+    expected_cost = chat_data["estimated_cost_cents"]
+    expected_variance = round(15.75 - expected_cost, 6)
     assert summary_data["provider_billing_records"] == 2
     assert summary_data["provider_billed_cost_cents"] == 15.75
-    assert summary_data["estimated_cost_cents"] == chat.json()["data"]["estimated_cost_cents"]
+    assert summary_data["estimated_cost_cents"] == expected_cost
+    assert summary_data["cost_reconciliation"]["estimated_cost_cents"] == expected_cost
+    assert summary_data["cost_reconciliation"]["provider_billed_cost_cents"] == 15.75
+    assert summary_data["cost_reconciliation"]["variance_cents"] == expected_variance
+    assert summary_data["cost_reconciliation"]["variance_ratio"] == (
+        None if expected_cost == 0 else round(expected_variance / expected_cost, 6)
+    )
+    assert summary_data["cost_reconciliation"]["has_provider_billing_sample"] is True
     assert summary_data["cost_source_counts"]["runtime_estimate"] == 1
     assert summary_data["cost_source_counts"]["provider_billing"] == 2
     assert summary_data["usage_source_counts"]["provider_billing"] == 2
     assert summary_data["billing_period_counts"]["monthly"] == 2
     assert summary_data["by_provider"]["openai"]["provider_billed_cost_cents"] == 15.75
+    assert summary_data["by_provider"]["openai"]["cost_variance_cents"] == 15.75
+    assert summary_data["by_provider"]["openai"]["cost_variance_ratio"] is None
     assert summary_data["by_provider"]["openai"]["provider_billing_records"] == 2
     assert summary_data["by_route"]["knowledge"]["provider_billed_cost_cents"] == 12.5
     assert summary_data["by_route"]["business"]["provider_billed_cost_cents"] == 3.25
+    assert summary_data["by_route"]["business"]["cost_variance_cents"] == 3.25
+    assert summary_data["by_route"]["business"]["cost_variance_ratio"] is None
 
     diagnostics = client.get(
         "/api/v1/admin/diagnostics",

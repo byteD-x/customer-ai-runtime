@@ -166,7 +166,7 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 - 诊断排障
   通过 `GET /api/v1/admin/diagnostics` 和 `GET /api/v1/admin/sessions/{session_id}/monitor` 定位会话异常
 - 成本与缓存观察
-  通过 `GET /api/v1/admin/costs/summary` 查看当前诊断样本中的 token、估算成本、缓存命中和预算告警
+  通过 `GET /api/v1/admin/costs/summary` 查看当前诊断样本中的 token、估算成本、provider billing 样本金额、诊断样本成本差异、缓存命中和预算告警
 - 人工接管队列
   通过 `GET /api/v1/admin/handoff/queue` 查看等待队列，通过 `POST /api/v1/admin/handoff/claim-next` 做管理端认领。默认 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`，可设置为 `sqlite` 验证共享队列表事务认领。
 - 告警拉取

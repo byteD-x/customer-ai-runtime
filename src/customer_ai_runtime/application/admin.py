@@ -34,6 +34,24 @@ def _percentile_ms(values: list[int], quantile: float) -> float | None:
     return float(ordered[index])
 
 
+def _cost_reconciliation(
+    estimated_cost_cents: float,
+    provider_billed_cost_cents: float,
+    *,
+    has_provider_billing_sample: bool,
+) -> dict[str, Any]:
+    estimated_cost = round(estimated_cost_cents, 6)
+    billed_cost = round(provider_billed_cost_cents, 6)
+    variance = round(billed_cost - estimated_cost, 6)
+    return {
+        "estimated_cost_cents": estimated_cost,
+        "provider_billed_cost_cents": billed_cost,
+        "variance_cents": variance,
+        "variance_ratio": None if estimated_cost == 0 else round(variance / estimated_cost, 6),
+        "has_provider_billing_sample": has_provider_billing_sample,
+    }
+
+
 class AdminService:
     def __init__(
         self,
@@ -217,12 +235,18 @@ class AdminService:
                 usage_source,
             )
         request_count = len(events)
+        reconciliation = _cost_reconciliation(
+            total_cost,
+            provider_billed_cost,
+            has_provider_billing_sample=provider_billing_records > 0,
+        )
         return {
             "tenant_id": tenant_id,
             "sample_size": request_count,
             "total_tokens": total_tokens,
             "estimated_cost_cents": round(total_cost, 6),
             "provider_billed_cost_cents": round(provider_billed_cost, 6),
+            "cost_reconciliation": reconciliation,
             "cache_hits": cache_hits,
             "cache_hit_rate": 0.0 if request_count == 0 else round(cache_hits / request_count, 4),
             "budget_alerts": alert_count,
@@ -943,6 +967,13 @@ class AdminService:
             bucket["provider_billing_records"] += 1
         else:
             bucket["estimated_usage_records"] += 1
+        reconciliation = _cost_reconciliation(
+            bucket["estimated_cost_cents"],
+            bucket["provider_billed_cost_cents"],
+            has_provider_billing_sample=bucket["provider_billing_records"] > 0,
+        )
+        bucket["cost_variance_cents"] = reconciliation["variance_cents"]
+        bucket["cost_variance_ratio"] = reconciliation["variance_ratio"]
 
     def _knowledge_effectiveness_recommendation(
         self,
