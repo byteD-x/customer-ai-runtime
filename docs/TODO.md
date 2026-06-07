@@ -20,7 +20,7 @@
 - AgentWorkflow HTTP API：顺序工具步骤、工具白名单、步骤上限、失败停止与 trace
 - 结构化交接包：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号
 - 人工接管队列：`HandoffQueueBackend.enqueue` 入队契约、技能组、优先级、默认 local 单进程 `claim-next`，以及可选 SQLite 共享队列表事务认领，返回当前后端 `consistency_scope`
-- 外部 readiness 脚本：OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖未配置时返回 `skipped`
+- 外部 readiness 脚本：OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖未配置时返回 `skipped`，JSON 输出包含检查范围、依赖环境变量、探针类型和证据口径等审计元数据
 - 线上 RAG 样本评估入口：`scripts/eval_online_rag.py` 读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`
 - k6 smoke 模板：`deploy/k6-smoke.js` 可对健康检查和管理端指标摘要做可复现压测入口
 - 本地质量门禁修复：`scripts/test.ps1` 串联静态检查、类型检查与测试
@@ -65,7 +65,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 k6 run deploy\k6-smoke.js
 ```
 
-本地 provider 会打印估算成本和 eval 结果；readiness 脚本在缺少外部配置时会返回 `skipped`。这些结果只代表当前本地样例、输入样本和配置就绪态，不代表线上指标、生产压测结果或真实外部联调通过。
+本地 provider 会打印估算成本和 eval 结果；readiness 脚本在缺少外部配置时会返回 `skipped`，并通过 `audit` 字段说明检查口径。这些结果只代表当前本地样例、输入样本和配置就绪态，不代表线上指标、生产压测结果或真实外部联调通过。
 
 ## 5. 维护规则
 

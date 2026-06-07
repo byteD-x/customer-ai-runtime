@@ -245,7 +245,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 # RAG 质量评测：route、引用关键词、上下文 precision/recall、有效命中率、失败明细（JSON 输出）
 .venv\Scripts\python.exe scripts\eval_rag.py --json
 
-# 外部联调 readiness：未配置凭据时返回 skipped，不宣称真实联调通过
+# 外部联调 readiness：输出审计元数据；未配置凭据时返回 skipped，不宣称真实联调通过
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json
 
 # 可选：真实线上脱敏标注样本评估，需要传入 JSON/JSONL 导出文件
@@ -257,7 +257,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
 ```
 
-当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。`cost_summary` 会区分 `estimated_cost_cents`（本地模型价格表估算）与 `provider_billed_cost_cents`（导入的 provider billing 样本金额），并通过 `cost_reconciliation` 展示诊断样本口径的 `variance_cents = provider_billed_cost_cents - estimated_cost_cents`。RAG eval 中的 `context_precision` / `context_recall` 是基于本地标注关键词和返回引用文本的启发式离线指标，用于暴露额外无关引用或上下文遗漏，不代表线上真实检索精度。`check_external_readiness.py` 会检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性，未配置时返回 `skipped`；只有真实凭据、网络和外部系统可达时才能声明对应联调通过。`eval_online_rag.py` 只基于你提供的脱敏线上标注样本计算 `online_accuracy`，没有样本时不代表线上准确率。上述结果只代表当前本地样例、导入样本或输入样本，不代表真实成本节省、自动 provider 账单拉取、外部 provider 端到端联调结果或生产 SLA。
+当前本地实测基线以本节命令输出为准；演示输出包含 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`，便于在面试中现场说明“低成本、高效率、可治理”的 AI 客服链路。`cost_summary` 会区分 `estimated_cost_cents`（本地模型价格表估算）与 `provider_billed_cost_cents`（导入的 provider billing 样本金额），并通过 `cost_reconciliation` 展示诊断样本口径的 `variance_cents = provider_billed_cost_cents - estimated_cost_cents`。RAG eval 中的 `context_precision` / `context_recall` 是基于本地标注关键词和返回引用文本的启发式离线指标，用于暴露额外无关引用或上下文遗漏，不代表线上真实检索精度。`check_external_readiness.py` 会检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性，并在顶层 `audit` 返回 `scope`、`generated_at`、`timeout_seconds`、`evidence_level` 和免责声明，在每个检查项的 `audit` 返回 `category`、`probe_type`、`required_env`、`optional_env`、`evidence`，用于审计检查口径且不暴露真实密钥；未配置时返回 `skipped`。只有真实凭据、网络和外部系统可达时才能声明对应联调通过。`eval_online_rag.py` 只基于你提供的脱敏线上标注样本计算 `online_accuracy`，没有样本时不代表线上准确率。上述结果只代表当前本地样例、导入样本或输入样本，不代表真实成本节省、自动 provider 账单拉取、外部 provider 端到端联调结果或生产 SLA。
 
 ## 插件扩展
 

@@ -5,6 +5,7 @@ import json
 import os
 import socket
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -17,6 +18,69 @@ DEFAULT_OPENAI_ADMIN_COSTS_PATH = "/organization/costs?limit=1"
 
 HttpGet = Callable[[str, dict[str, str], float], int]
 TcpConnect = Callable[[str, int, float], None]
+
+CHECK_AUDIT: dict[str, dict[str, Any]] = {
+    "openai_models": {
+        "category": "llm_provider",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_OPENAI_API_KEY"],
+        "optional_env": ["CUSTOMER_AI_OPENAI_BASE_URL"],
+    },
+    "openai_admin_usage": {
+        "category": "billing_provider",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_OPENAI_ADMIN_API_KEY"],
+        "optional_env": [
+            "CUSTOMER_AI_OPENAI_ADMIN_BASE_URL",
+            "CUSTOMER_AI_OPENAI_ADMIN_USAGE_PATH",
+        ],
+    },
+    "openai_admin_costs": {
+        "category": "billing_provider",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_OPENAI_ADMIN_API_KEY"],
+        "optional_env": [
+            "CUSTOMER_AI_OPENAI_ADMIN_BASE_URL",
+            "CUSTOMER_AI_OPENAI_ADMIN_COSTS_PATH",
+        ],
+    },
+    "qdrant_health": {
+        "category": "vector_store",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_QDRANT_URL"],
+        "optional_env": ["CUSTOMER_AI_QDRANT_API_KEY"],
+    },
+    "qdrant_collections": {
+        "category": "vector_store",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_QDRANT_URL"],
+        "optional_env": ["CUSTOMER_AI_QDRANT_API_KEY"],
+    },
+    "business_api": {
+        "category": "business_system",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_BUSINESS_API_BASE_URL"],
+        "optional_env": ["CUSTOMER_AI_BUSINESS_API_KEY"],
+    },
+    "ticket_api": {
+        "category": "ticket_system",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_TICKET_API_BASE_URL"],
+        "optional_env": ["CUSTOMER_AI_TICKET_API_KEY"],
+    },
+    "redis_queue": {
+        "category": "queue_dependency",
+        "probe_type": "tcp_connect",
+        "required_env": ["CUSTOMER_AI_REDIS_HOST"],
+        "optional_env": ["CUSTOMER_AI_REDIS_PORT"],
+    },
+    "postgres_queue": {
+        "category": "queue_dependency",
+        "probe_type": "tcp_connect",
+        "required_env": ["CUSTOMER_AI_POSTGRES_HOST"],
+        "optional_env": ["CUSTOMER_AI_POSTGRES_PORT"],
+    },
+}
 
 
 def run_checks(
@@ -41,6 +105,8 @@ def run_checks(
         _check_redis_queue(env, timeout_seconds, tcp_connect),
         _check_postgres_queue(env, timeout_seconds, tcp_connect),
     ]
+    _attach_audits(checks)
+
     status_counts: dict[str, int] = {}
     for check in checks:
         status = str(check["status"])
@@ -51,6 +117,16 @@ def run_checks(
     return {
         "overall_status": overall_status,
         "status_counts": status_counts,
+        "audit": {
+            "scope": "optional_external_integration_readiness",
+            "generated_at": _utc_now(),
+            "timeout_seconds": timeout_seconds,
+            "evidence_level": "configuration_and_probe",
+            "disclaimer": (
+                "Readiness checks verify optional configuration, HTTP/TCP reachability, "
+                "and limited permission probes only; they do not prove end-to-end integration."
+            ),
+        },
         "checks": checks,
     }
 
@@ -66,9 +142,21 @@ def main() -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("external_readiness")
+        audit = report["audit"]
+        print(f"scope: {audit['scope']}")
+        print(f"evidence_level: {audit['evidence_level']}")
+        print(f"timeout_seconds: {audit['timeout_seconds']}")
         for check in report["checks"]:
             print(f"- {check['name']}: {check['status']} ({check['message']})")
+            check_audit = check["audit"]
+            print(
+                "  "
+                f"category={check_audit['category']}; "
+                f"probe_type={check_audit['probe_type']}; "
+                f"required_env={','.join(check_audit['required_env']) or '-'}"
+            )
         print(f"overall_status: {report['overall_status']}")
+        print(f"disclaimer: {audit['disclaimer']}")
     return 1 if report["overall_status"] == "failed" else 0
 
 
@@ -333,6 +421,32 @@ def _skipped(name: str, message: str) -> dict[str, Any]:
         "status": "skipped",
         "message": message,
     }
+
+
+def _attach_audits(checks: list[dict[str, Any]]) -> None:
+    for check in checks:
+        metadata = CHECK_AUDIT[str(check["name"])]
+        audit = dict(metadata)
+        audit["evidence"] = _audit_evidence(
+            status=str(check["status"]),
+            message=str(check["message"]),
+            probe_type=str(metadata["probe_type"]),
+        )
+        check["audit"] = audit
+
+
+def _audit_evidence(*, status: str, message: str, probe_type: str) -> str:
+    if status == "skipped":
+        return "missing_required_env"
+    if probe_type == "tcp_connect":
+        return "tcp_connection" if status == "passed" else "tcp_exception"
+    if status == "failed" and not message.startswith("HTTP "):
+        return "http_exception"
+    return "http_status_code"
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 if __name__ == "__main__":

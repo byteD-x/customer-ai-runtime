@@ -211,6 +211,10 @@ def test_external_readiness_skips_missing_optional_credentials() -> None:
 
     assert report["overall_status"] == "skipped"
     assert report["status_counts"] == {"skipped": 9}
+    assert report["audit"]["scope"] == "optional_external_integration_readiness"
+    assert report["audit"]["timeout_seconds"] == 0.1
+    assert report["audit"]["evidence_level"] == "configuration_and_probe"
+    assert report["audit"]["generated_at"].endswith("Z")
     assert {check["name"] for check in report["checks"]} == {
         "openai_models",
         "openai_admin_usage",
@@ -223,3 +227,11 @@ def test_external_readiness_skips_missing_optional_credentials() -> None:
         "postgres_queue",
     }
     assert all(check["status"] == "skipped" for check in report["checks"])
+    openai_check = next(check for check in report["checks"] if check["name"] == "openai_models")
+    assert openai_check["audit"]["category"] == "llm_provider"
+    assert openai_check["audit"]["probe_type"] == "http_get"
+    assert openai_check["audit"]["required_env"] == ["CUSTOMER_AI_OPENAI_API_KEY"]
+    assert openai_check["audit"]["evidence"] == "missing_required_env"
+    postgres_check = next(check for check in report["checks"] if check["name"] == "postgres_queue")
+    assert postgres_check["audit"]["category"] == "queue_dependency"
+    assert postgres_check["audit"]["required_env"] == ["CUSTOMER_AI_POSTGRES_HOST"]

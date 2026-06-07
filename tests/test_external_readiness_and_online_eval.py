@@ -43,6 +43,11 @@ def test_external_readiness_passes_with_mocked_dependencies() -> None:
 
     assert report["overall_status"] == "ready"
     assert report["status_counts"] == {"passed": 9}
+    assert report["audit"]["scope"] == "optional_external_integration_readiness"
+    assert report["audit"]["timeout_seconds"] == 0.1
+    assert report["audit"]["evidence_level"] == "configuration_and_probe"
+    assert report["audit"]["generated_at"].endswith("Z")
+    assert "end-to-end integration" in report["audit"]["disclaimer"]
     assert observed_tcp_endpoints == [("redis", 6379), ("postgres", 5432)]
     serialized = json.dumps(report, ensure_ascii=False)
     assert "real-openai-key" not in serialized
@@ -53,6 +58,18 @@ def test_external_readiness_passes_with_mocked_dependencies() -> None:
         for check in report["checks"]
         if check.get("headers")
     )
+    openai_check = next(check for check in report["checks"] if check["name"] == "openai_models")
+    assert openai_check["audit"] == {
+        "category": "llm_provider",
+        "probe_type": "http_get",
+        "required_env": ["CUSTOMER_AI_OPENAI_API_KEY"],
+        "optional_env": ["CUSTOMER_AI_OPENAI_BASE_URL"],
+        "evidence": "http_status_code",
+    }
+    redis_check = next(check for check in report["checks"] if check["name"] == "redis_queue")
+    assert redis_check["audit"]["category"] == "queue_dependency"
+    assert redis_check["audit"]["probe_type"] == "tcp_connect"
+    assert redis_check["audit"]["evidence"] == "tcp_connection"
 
 
 def test_external_readiness_fails_on_http_failure() -> None:
@@ -69,6 +86,8 @@ def test_external_readiness_fails_on_http_failure() -> None:
     assert report["overall_status"] == "failed"
     assert openai_check["status"] == "failed"
     assert openai_check["message"] == "HTTP 403"
+    assert openai_check["audit"]["required_env"] == ["CUSTOMER_AI_OPENAI_API_KEY"]
+    assert openai_check["audit"]["evidence"] == "http_status_code"
 
 
 def test_online_rag_eval_reads_jsonl_labeled_samples(tmp_path: Path) -> None:

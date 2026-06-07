@@ -106,7 +106,7 @@ python -m compileall -q src tests
 - `providers`：可选 provider、云厂商 speech provider 与 OpenAI prompt 组装测试。
 - `costs`：成本治理目标测试，覆盖知识缓存、模型价格表、租户成本策略和 provider billing 样本导入。
 - `smoke`：插件、路由、回复后处理和限流主体等低成本冒烟测试。
-- `external`：外部 readiness 与线上 RAG 样本评估入口测试。
+- `external`：外部 readiness、readiness 审计元数据与线上 RAG 样本评估入口测试。
 - `runner`：分组 pytest runner 自身测试。
 - `selector`：快速测试选择器自身测试。
 - `full`：完整 `pytest tests`，用于显式回退验证。
@@ -135,7 +135,7 @@ python -m compileall -q src tests
 - 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领，并返回 `queue_backend` / `atomic_claim` / `consistency_scope` 当前后端口径；SQLite 后端需覆盖共享队列表事务认领，默认 local 后端仍只代表单进程锁内认领
 - RAG eval 应覆盖 8 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy` 和 `faithfulness_score`
 - Chat 知识回复缺少有效引用时应返回 `refusal=true`、`refusal_reason`、空 `citations` / `references`，避免无证据强答
-- 外部 readiness 脚本在缺少 OpenAI / OpenAI Admin / Qdrant / 业务 API / 工单 API / Redis / Postgres 配置时应返回 `skipped`，配置后按真实 HTTP/TCP 探针返回 `passed` 或 `failed`
+- 外部 readiness 脚本在缺少 OpenAI / OpenAI Admin / Qdrant / 业务 API / 工单 API / Redis / Postgres 配置时应返回 `skipped`，配置后按真实 HTTP/TCP 探针返回 `passed` 或 `failed`；JSON 输出应包含顶层 `audit` 与逐项 `audit`，用于说明检查范围、依赖环境变量、探针类型和证据口径
 - 线上 RAG 评估脚本只读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`，不能在缺少样本时宣称线上准确率
 - k6 smoke 只验证当前部署的健康检查和指标摘要接口，不等同于生产 SLA 或容量上限
 - 面试演示脚本应输出 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`
@@ -146,7 +146,7 @@ python -m compileall -q src tests
 ## 6. 当前不可验证项
 
 - 若未配置真实 OpenAI / Qdrant / 外部业务系统，只能验证本地默认提供商链路，不能宣称外部联调已通过。
-- `scripts/check_external_readiness.py` 只检查可选外部依赖配置、可达性和部分权限探针；未配置时为 `skipped`，不代表外部联调失败或通过。
+- `scripts/check_external_readiness.py` 只检查可选外部依赖配置、HTTP/TCP 可达性和部分权限探针；审计元数据只说明检查口径，未配置时为 `skipped`，不代表外部联调失败或通过。
 - `deploy/k6-smoke.js` 是压测模板；未运行真实压测并保留输出前，不能声明 QPS、p95/p99 或 SLA。
 - `scripts/eval_rag.py` 使用本地 provider 与临时存储，验证的是可重复的本地标注样例离线评测闭环；其中 `context_precision` / `context_recall` 基于本地标注关键词和返回引用文本启发式计算，用于暴露额外无关引用或上下文遗漏，不代表线上准确率。
 - `scripts/eval_online_rag.py` 需要真实业务导出的脱敏标注样本；输出只代表该输入样本，不自动代表全量线上准确率。
