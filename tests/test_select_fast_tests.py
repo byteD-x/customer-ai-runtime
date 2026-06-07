@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.select_fast_tests import select_targets
+from scripts.select_fast_tests import select_targets, targets_for_suites
 
 
 def test_selects_rag_suite_for_evaluation_change() -> None:
@@ -39,10 +39,7 @@ def test_selects_api_and_costs_suites_for_admin_change() -> None:
     selection = select_targets(["src/customer_ai_runtime/application/admin.py"])
 
     assert selection.suites == ("api", "costs")
-    assert "tests/test_runtime_api.py" in selection.targets
-    assert "tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary" in (
-        selection.targets
-    )
+    assert selection.targets == ("tests/test_runtime_api.py",)
 
 
 def test_selects_handoff_suite_for_handoff_queue_change() -> None:
@@ -64,8 +61,9 @@ def test_selects_api_and_providers_suites_for_container_change() -> None:
 
     assert selection.suites == ("api", "handoff", "providers")
     assert "tests/test_runtime_api.py" in selection.targets
-    assert "tests/test_runtime_api.py::test_handoff_queue_can_use_sqlite_backend_from_settings" in (
-        selection.targets
+    assert (
+        "tests/test_runtime_api.py::test_handoff_queue_can_use_sqlite_backend_from_settings"
+        not in selection.targets
     )
     assert "tests/test_provider_extensions.py" in selection.targets
     assert "tests/test_speech_provider_extensions.py" in selection.targets
@@ -92,6 +90,18 @@ def test_merges_direct_test_targets_and_suite_targets_without_duplicates() -> No
         "tests/test_rag_quality.py",
         "tests/test_interview_artifacts.py",
     )
+
+
+def test_file_target_covers_node_targets_from_other_suites() -> None:
+    targets = targets_for_suites(("api", "costs"))
+
+    assert targets == ("tests/test_runtime_api.py",)
+
+
+def test_directory_target_covers_nested_suite_targets() -> None:
+    targets = targets_for_suites(("full", "api", "rag"))
+
+    assert targets == ("tests",)
 
 
 def test_unknown_runtime_change_falls_back_to_full_pytest() -> None:

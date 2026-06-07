@@ -90,7 +90,7 @@ python -m compileall -q src tests
 
 `scripts/test-fast.ps1` 用于开发中的目标化回归，不替代提交前完整门禁。当前预设：
 
-- `auto`：根据当前 `git status` 自动选择最小 pytest 目标，包含未跟踪的新文件；无法安全归类时回退完整 `pytest tests`。
+- `auto`：根据当前 `git status` 自动选择最小 pytest 目标，包含未跟踪的新文件；多个 suite 合并时会剪掉已被整文件或目录目标覆盖的 nodeid，避免重复收集；无法安全归类时回退完整 `pytest tests`。
 - `stream`：文本知识问答 + 流式 Chat 正常/错误事件，默认 suite。
 - `api`：完整 runtime API 集成测试。
 - `handoff`：人工接管、反馈转人工、local/SQLite 队列排序/认领和队列后端注入测试。

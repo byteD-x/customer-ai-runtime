@@ -137,7 +137,7 @@ def select_targets(changed_paths: Iterable[str]) -> FastTestSelection:
         )
 
     ordered_suites = tuple(suite for suite in SUITE_ORDER if suite in suites)
-    targets = _dedupe([*direct_targets, *targets_for_suites(ordered_suites)])
+    targets = _compact_targets([*direct_targets, *targets_for_suites(ordered_suites)])
     if not targets:
         return _selection(
             changed_paths=normalized_paths,
@@ -153,7 +153,7 @@ def select_targets(changed_paths: Iterable[str]) -> FastTestSelection:
 
 
 def targets_for_suites(suites: Iterable[str]) -> tuple[str, ...]:
-    return tuple(_dedupe(target for suite in suites for target in SUITE_TARGETS[suite]))
+    return tuple(_compact_targets(target for suite in suites for target in SUITE_TARGETS[suite]))
 
 
 def changed_paths_from_git() -> tuple[str, ...]:
@@ -295,6 +295,35 @@ def _dedupe(items: Iterable[str]) -> list[str]:
         seen.add(item)
         unique.append(item)
     return unique
+
+
+def _compact_targets(items: Iterable[str]) -> list[str]:
+    compacted: list[str] = []
+    for item in _dedupe(items):
+        if any(_target_covers(existing, item) for existing in compacted):
+            continue
+        compacted = [existing for existing in compacted if not _target_covers(item, existing)]
+        compacted.append(item)
+    return compacted
+
+
+def _target_covers(covering: str, candidate: str) -> bool:
+    if covering == candidate:
+        return True
+    if "::" in covering:
+        return False
+
+    covering_base = _target_base(covering)
+    candidate_base = _target_base(candidate)
+    if covering_base == candidate_base:
+        return True
+    if covering_base.endswith(".py"):
+        return False
+    return candidate_base.startswith(f"{covering_base}/")
+
+
+def _target_base(target: str) -> str:
+    return target.split("::", 1)[0].replace("\\", "/").rstrip("/")
 
 
 if __name__ == "__main__":

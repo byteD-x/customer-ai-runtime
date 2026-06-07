@@ -345,7 +345,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe -m pytest --cov=src/customer_ai_runtime --cov-report=html
 ```
 
-`scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。`-Suite auto` 会基于当前 `git status` 自动选择最小 pytest 目标，包括未跟踪的新文件；无法安全归类的运行时代码、依赖、CI 或门禁脚本变更会回退到完整 `pytest tests`。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
+`scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。`-Suite auto` 会基于当前 `git status` 自动选择最小 pytest 目标，包括未跟踪的新文件；当多个 suite 同时选中时，会剪掉已被整文件或目录目标覆盖的 nodeid，避免重复收集；无法安全归类的运行时代码、依赖、CI 或门禁脚本变更会回退到完整 `pytest tests`。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
 
 人工接管队列默认使用 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`；需要验证共享队列表事务认领时可设置为 `sqlite`，队列文件位于 `<storage_root>/state/handoff_queue.sqlite3`。该后端只覆盖人工接管队列的入队与 `claim-next` 认领，不代表 Session JSON 仓储已经具备完整多实例强一致能力。
 
