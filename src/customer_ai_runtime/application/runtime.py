@@ -149,7 +149,7 @@ class RuntimeConfigService:
         return self._policies.model_copy(deep=True)
 
     def update_policies(self, data: dict[str, Any]) -> PolicyConfig:
-        self._policies = self._policies.model_copy(update=data)
+        self._policies = PolicyConfig.model_validate(self._policies.model_dump(mode="json") | data)
         if (
             not self._policies.response_cache_enabled
             or self._policies.response_cache_ttl_seconds <= 0

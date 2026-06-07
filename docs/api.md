@@ -178,9 +178,9 @@
 - `estimated_cost_cents`：按本地模型价格表估算的本轮成本，单位为美分
 - `budget_status`：`ok` / `alert`
 - `usage_source`：`estimated` / `provider`，区分本地估算用量与真实 provider usage
-- `billing_currency`：当前本地估算统一为 `USD`
-- `billing_period`：当前本地口径为 `per_request`
-- `tenant_budget_estimated_cents`：当前策略中的本地预算告警阈值，仍不是租户真实账单额度
+- `billing_currency`：当前本地估算默认 `USD`，可通过租户成本策略覆盖
+- `billing_period`：当前本地口径默认 `per_request`，可通过租户成本策略覆盖
+- `tenant_budget_estimated_cents`：当前策略中的本地预算告警阈值，可按租户覆盖，仍不是租户真实账单额度
 
 `handoff` 为结构化交接包，当前重点字段包括：
 
@@ -403,7 +403,7 @@
   - `by_provider`
   - `by_route`
 
-说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；真实账单结算还需要 provider 原生账单、租户预算、币种和账期系统对接。
+说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；`billing_currency`、`billing_period` 与 `tenant_budget_estimated_cents` 支持策略配置和租户级覆盖，但真实账单结算还需要 provider 原生账单与账单系统对接。
 
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
 
@@ -534,6 +534,9 @@
 - `response_cache_enabled`
 - `response_cache_ttl_seconds`
 - `cost_alert_estimated_cents`
+- `billing_currency`
+- `billing_period`
+- `tenant_cost_policies`
 
 ### `GET /api/v1/admin/diagnostics`
 

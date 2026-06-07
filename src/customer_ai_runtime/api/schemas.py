@@ -158,6 +158,12 @@ class PromptRollbackRequest(BaseModel):
     change_summary: str | None = Field(default=None, max_length=512)
 
 
+class TenantCostPolicyUpdateRequest(BaseModel):
+    alert_estimated_cents: float | None = Field(default=None, ge=0.0, le=1_000_000.0)
+    billing_currency: str | None = Field(default=None, min_length=3, max_length=12)
+    billing_period: str | None = Field(default=None, min_length=1, max_length=64)
+
+
 class PolicyUpdateRequest(BaseModel):
     knowledge_top_k: int | None = Field(default=None, ge=1, le=10)
     knowledge_min_score: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -168,6 +174,9 @@ class PolicyUpdateRequest(BaseModel):
     response_cache_enabled: bool | None = None
     response_cache_ttl_seconds: int | None = Field(default=None, ge=0, le=86400)
     cost_alert_estimated_cents: float | None = Field(default=None, ge=0.0, le=1_000_000.0)
+    billing_currency: str | None = Field(default=None, min_length=3, max_length=12)
+    billing_period: str | None = Field(default=None, min_length=1, max_length=64)
+    tenant_cost_policies: dict[str, TenantCostPolicyUpdateRequest] | None = None
     risk_keywords: list[str] | None = None
     human_request_keywords: list[str] | None = None
     intent_return_keywords: list[str] | None = None

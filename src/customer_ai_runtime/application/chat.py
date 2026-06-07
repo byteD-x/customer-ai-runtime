@@ -418,18 +418,18 @@ class ChatService:
             provider=provider,
             model=selected_model,
         )
-        budget_status = (
-            "alert" if estimated_cost_cents >= policies.cost_alert_estimated_cents else "ok"
-        )
+        cost_policy = policies.cost_policy_for(tenant_id)
+        tenant_budget_estimated_cents = float(cost_policy.alert_estimated_cents or 0.0)
+        budget_status = "alert" if estimated_cost_cents >= tenant_budget_estimated_cents else "ok"
         usage_source = "estimated" if usage.estimated else "provider"
-        billing_currency = "USD"
-        billing_period = "per_request"
+        billing_currency = cost_policy.billing_currency or "USD"
+        billing_period = cost_policy.billing_period or "per_request"
         response_payload["estimated_cost_cents"] = estimated_cost_cents
         response_payload["budget_status"] = budget_status
         response_payload["usage_source"] = usage_source
         response_payload["billing_currency"] = billing_currency
         response_payload["billing_period"] = billing_period
-        response_payload["tenant_budget_estimated_cents"] = policies.cost_alert_estimated_cents
+        response_payload["tenant_budget_estimated_cents"] = tenant_budget_estimated_cents
         self._record_cost(
             tenant_id=tenant_id,
             session_id=session.session_id,
@@ -444,7 +444,7 @@ class ChatService:
             usage_source=usage_source,
             billing_currency=billing_currency,
             billing_period=billing_period,
-            tenant_budget_estimated_cents=policies.cost_alert_estimated_cents,
+            tenant_budget_estimated_cents=tenant_budget_estimated_cents,
         )
         self.session_service.add_message(
             session,

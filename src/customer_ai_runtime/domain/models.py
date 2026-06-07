@@ -287,6 +287,12 @@ class CostRecord(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class TenantCostPolicy(BaseModel):
+    alert_estimated_cents: float | None = Field(default=None, ge=0.0)
+    billing_currency: str | None = None
+    billing_period: str | None = None
+
+
 class LLMRequest(BaseModel):
     tenant_id: str
     session_id: str
@@ -368,6 +374,9 @@ class PolicyConfig(BaseModel):
     response_cache_enabled: bool = True
     response_cache_ttl_seconds: int = 300
     cost_alert_estimated_cents: float = 50.0
+    billing_currency: str = "USD"
+    billing_period: str = "per_request"
+    tenant_cost_policies: dict[str, TenantCostPolicy] = Field(default_factory=dict)
     risk_keywords: list[str] = Field(
         default_factory=lambda: ["投诉", "仲裁", "监管", "律师", "报警", "安全事故"]
     )
@@ -391,6 +400,26 @@ class PolicyConfig(BaseModel):
             "account_lookup": ["账号", "会员", "积分", "账户"],
         }
     )
+
+    def cost_policy_for(self, tenant_id: str) -> TenantCostPolicy:
+        tenant_policy = self.tenant_cost_policies.get(tenant_id)
+        return TenantCostPolicy(
+            alert_estimated_cents=(
+                self.cost_alert_estimated_cents
+                if tenant_policy is None or tenant_policy.alert_estimated_cents is None
+                else tenant_policy.alert_estimated_cents
+            ),
+            billing_currency=(
+                self.billing_currency
+                if tenant_policy is None or tenant_policy.billing_currency is None
+                else tenant_policy.billing_currency
+            ),
+            billing_period=(
+                self.billing_period
+                if tenant_policy is None or tenant_policy.billing_period is None
+                else tenant_policy.billing_period
+            ),
+        )
 
 
 class AlertRuleConfig(BaseModel):

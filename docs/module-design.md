@@ -323,7 +323,7 @@
 - LLM provider 返回或本地估算的 `LLMUsage`
 - route、provider、channel、session、cache_hit
 - 本地模型价格表配置
-- `PolicyConfig.cost_alert_estimated_cents`
+- `PolicyConfig.cost_alert_estimated_cents`、`billing_currency`、`billing_period` 与 `tenant_cost_policies`
 
 ### 输出
 
@@ -333,7 +333,7 @@
 
 ### 设计取舍
 
-- 本地 provider 默认估算 token，并按本地模型价格表估算成本，用于演示治理链路；真实 provider 可优先使用 SDK usage，但真实账单仍属于 future target。
+- 本地 provider 默认估算 token，并按本地模型价格表估算成本，用于演示治理链路；预算阈值、币种和账期支持全局策略与租户级覆盖；真实 provider 可优先使用 SDK usage，但真实账单仍属于 future target。
 - 知识问答缓存命中时 usage 归零，便于观察缓存节省的请求。
 - 业务工具查询不缓存，避免实时订单、物流、售后状态过期。
 
@@ -384,4 +384,4 @@
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
 - 当前人工接管队列是基于 `Session` 的单实例轻量队列；人工接管入队已通过 `HandoffQueueBackend.enqueue` 接口化并由容器统一注入，默认仍为 `local` 后端；`queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 仅表示单进程锁内认领边界，Redis sorted set / 数据库事务认领属于 future target。
 - 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`；online eval 只代表输入样本，不代表全量线上准确率。
-- 当前成本治理是本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值，不代表真实 provider 账单或线上节省比例。
+- 当前成本治理是本地模型价格表估算，并显式暴露 usage 来源、可配置币种、可配置账期和可配置本地预算阈值，不代表真实 provider 账单或线上节省比例。

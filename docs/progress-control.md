@@ -42,7 +42,7 @@
 - 插件注册中心与路由/工具/人工协同/行业/上下文/回复插件
 - 行业适配器、知识域管理与上下文解析接口
 - 插件管理接口与多认证模式测试
-- LLM usage / cache hit / estimated cost 记录、`usage_source`、`billing_currency`、`billing_period`、`tenant_budget_estimated_cents` 与成本摘要接口
+- LLM usage / cache hit / estimated cost 记录、`usage_source`、可配置 `billing_currency`、可配置 `billing_period`、可配置 `tenant_budget_estimated_cents`、租户成本策略与成本摘要接口
 - 可配置模型价格表，用于按 provider / model 估算本轮调用成本
 - 知识问答安全缓存与业务查询不缓存策略
 - Prompt revision 只读摘要、安全 diff、账本异常 issues 与回滚审计链路
@@ -68,7 +68,7 @@
 - 插件化改造会影响现有路由、工具和人工协同主链路，需通过回归测试兜底。
 - 当前默认本地 ASR/TTS 仍主要用于开发验证；真实生产音频能力依赖外部提供商配置。
 - 当前 RAG eval 是本地标注样例，包含 cohort、人工复核状态、`offline_accuracy`、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 分数；online eval 只代表输入的脱敏样本，不代表全量线上准确率。
-- 当前成本支持本地模型价格表估算，并显式返回 usage 来源、币种、账期和本地预算阈值；真实账单结算仍需要接入 provider 原生 usage、租户预算、币种和结算周期。
+- 当前成本支持本地模型价格表估算，并显式返回 usage 来源、可配置币种、可配置账期和可配置本地预算阈值；真实账单结算仍需要接入 provider 原生 usage 与账单系统。
 - 当前人工接管队列默认 `local` 后端，入队动作已接口化并由容器统一注入；`atomic_claim=true` 仅表示单进程锁内认领，`consistency_scope=single_process` 明确当前一致性边界；多实例原子认领是 future target。
 - 当前 readiness 脚本在缺少外部配置时返回 `skipped`，不能据此声明外部联调通过或失败；k6 smoke 模板未运行真实压测前不能声明生产 SLA。
 

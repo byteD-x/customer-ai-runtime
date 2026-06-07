@@ -1348,6 +1348,55 @@ def test_chat_cost_uses_configured_model_price_map(
     get_settings.cache_clear()
 
 
+def test_chat_cost_uses_tenant_billing_policy(client: TestClient) -> None:
+    policy_update = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={
+            "billing_currency": "USD",
+            "billing_period": "per_request",
+            "tenant_cost_policies": {
+                "demo-tenant": {
+                    "alert_estimated_cents": 0.0,
+                    "billing_currency": "CNY",
+                    "billing_period": "monthly",
+                }
+            },
+        },
+    )
+    assert policy_update.status_code == 200
+    policy_data = policy_update.json()["data"]
+    assert policy_data["tenant_cost_policies"]["demo-tenant"]["billing_currency"] == "CNY"
+
+    response = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "hello",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["billing_currency"] == "CNY"
+    assert data["billing_period"] == "monthly"
+    assert data["tenant_budget_estimated_cents"] == 0.0
+    assert data["budget_status"] == "alert"
+
+    summary = client.get(
+        "/api/v1/admin/costs/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    summary_data = summary.json()["data"]
+    assert summary_data["budget_alerts"] >= 1
+    assert summary_data["billing_currency_counts"]["CNY"] == 1
+    assert summary_data["billing_period_counts"]["monthly"] == 1
+    assert summary_data["tenant_budget_estimated_cents"] == 0.0
+
+
 def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> None:
     normal = client.post(
         "/api/v1/chat/messages",
