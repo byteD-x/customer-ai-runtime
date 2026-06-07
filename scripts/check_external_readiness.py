@@ -44,6 +44,15 @@ CHECK_AUDIT: dict[str, dict[str, Any]] = {
             "CUSTOMER_AI_OPENAI_ADMIN_COSTS_PATH",
         ],
     },
+    "qdrant_runtime_config": {
+        "category": "vector_store",
+        "probe_type": "configuration",
+        "required_env": [],
+        "optional_env": [
+            "CUSTOMER_AI_VECTOR_PROVIDER",
+            "CUSTOMER_AI_QDRANT_URL",
+        ],
+    },
     "qdrant_health": {
         "category": "vector_store",
         "probe_type": "http_get",
@@ -98,6 +107,7 @@ def run_checks(
         _check_openai_models(env, timeout_seconds, http_get),
         _check_openai_admin_usage(env, timeout_seconds, http_get),
         _check_openai_admin_costs(env, timeout_seconds, http_get),
+        _check_qdrant_runtime_config(env),
         _check_qdrant_health(env, timeout_seconds, http_get),
         _check_qdrant_collections(env, timeout_seconds, http_get),
         _check_business_api(env, timeout_seconds, http_get),
@@ -234,6 +244,32 @@ def _check_openai_admin_endpoint(
         request_headers={"Authorization": f"Bearer {admin_key}"},
         http_get=http_get,
     )
+
+
+def _check_qdrant_runtime_config(env: Mapping[str, str]) -> dict[str, Any]:
+    vector_provider = (env.get("CUSTOMER_AI_VECTOR_PROVIDER") or "local").strip().lower()
+    if not vector_provider:
+        vector_provider = "local"
+    if vector_provider != "qdrant":
+        return {
+            "name": "qdrant_runtime_config",
+            "status": "skipped",
+            "message": f"CUSTOMER_AI_VECTOR_PROVIDER={vector_provider} does not enable Qdrant",
+            "vector_provider": vector_provider,
+        }
+    if not env.get("CUSTOMER_AI_QDRANT_URL"):
+        return {
+            "name": "qdrant_runtime_config",
+            "status": "failed",
+            "message": "missing CUSTOMER_AI_QDRANT_URL while CUSTOMER_AI_VECTOR_PROVIDER=qdrant",
+            "vector_provider": vector_provider,
+        }
+    return {
+        "name": "qdrant_runtime_config",
+        "status": "passed",
+        "message": "Qdrant vector provider is enabled and CUSTOMER_AI_QDRANT_URL is configured",
+        "vector_provider": vector_provider,
+    }
 
 
 def _check_qdrant_health(
@@ -436,6 +472,14 @@ def _attach_audits(checks: list[dict[str, Any]]) -> None:
 
 
 def _audit_evidence(*, status: str, message: str, probe_type: str) -> str:
+    if probe_type == "configuration":
+        if status == "passed":
+            return "configuration_consistent"
+        if status == "failed":
+            return "configuration_mismatch"
+        if "does not enable Qdrant" in message:
+            return "provider_not_enabled"
+        return "missing_required_env"
     if status == "skipped":
         return "missing_required_env"
     if probe_type == "tcp_connect":

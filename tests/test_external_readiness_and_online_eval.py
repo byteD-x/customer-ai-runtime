@@ -25,6 +25,7 @@ def test_external_readiness_passes_with_mocked_dependencies() -> None:
             "CUSTOMER_AI_OPENAI_BASE_URL": "https://api.example.test/v1",
             "CUSTOMER_AI_OPENAI_ADMIN_API_KEY": "real-admin-key",
             "CUSTOMER_AI_OPENAI_ADMIN_BASE_URL": "https://api.example.test/v1",
+            "CUSTOMER_AI_VECTOR_PROVIDER": "qdrant",
             "CUSTOMER_AI_QDRANT_URL": "http://qdrant:6333",
             "CUSTOMER_AI_QDRANT_API_KEY": "real-qdrant-key",
             "CUSTOMER_AI_BUSINESS_API_BASE_URL": "http://api/business",
@@ -42,7 +43,7 @@ def test_external_readiness_passes_with_mocked_dependencies() -> None:
     )
 
     assert report["overall_status"] == "ready"
-    assert report["status_counts"] == {"passed": 9}
+    assert report["status_counts"] == {"passed": 10}
     assert report["audit"]["scope"] == "optional_external_integration_readiness"
     assert report["audit"]["timeout_seconds"] == 0.1
     assert report["audit"]["evidence_level"] == "configuration_and_probe"
@@ -66,6 +67,21 @@ def test_external_readiness_passes_with_mocked_dependencies() -> None:
         "optional_env": ["CUSTOMER_AI_OPENAI_BASE_URL"],
         "evidence": "http_status_code",
     }
+    qdrant_config_check = next(
+        check for check in report["checks"] if check["name"] == "qdrant_runtime_config"
+    )
+    assert qdrant_config_check["status"] == "passed"
+    assert qdrant_config_check["vector_provider"] == "qdrant"
+    assert qdrant_config_check["audit"] == {
+        "category": "vector_store",
+        "probe_type": "configuration",
+        "required_env": [],
+        "optional_env": [
+            "CUSTOMER_AI_VECTOR_PROVIDER",
+            "CUSTOMER_AI_QDRANT_URL",
+        ],
+        "evidence": "configuration_consistent",
+    }
     redis_check = next(check for check in report["checks"] if check["name"] == "redis_queue")
     assert redis_check["audit"]["category"] == "queue_dependency"
     assert redis_check["audit"]["probe_type"] == "tcp_connect"
@@ -88,6 +104,45 @@ def test_external_readiness_fails_on_http_failure() -> None:
     assert openai_check["message"] == "HTTP 403"
     assert openai_check["audit"]["required_env"] == ["CUSTOMER_AI_OPENAI_API_KEY"]
     assert openai_check["audit"]["evidence"] == "http_status_code"
+
+
+def test_external_readiness_fails_when_qdrant_provider_lacks_url() -> None:
+    report = run_checks(
+        env={"CUSTOMER_AI_VECTOR_PROVIDER": "qdrant"},
+        timeout_seconds=0.1,
+    )
+
+    qdrant_config_check = next(
+        check for check in report["checks"] if check["name"] == "qdrant_runtime_config"
+    )
+    assert report["overall_status"] == "failed"
+    assert qdrant_config_check["status"] == "failed"
+    assert qdrant_config_check["message"] == (
+        "missing CUSTOMER_AI_QDRANT_URL while CUSTOMER_AI_VECTOR_PROVIDER=qdrant"
+    )
+    assert qdrant_config_check["vector_provider"] == "qdrant"
+    assert qdrant_config_check["audit"]["evidence"] == "configuration_mismatch"
+
+
+def test_external_readiness_skips_qdrant_config_when_provider_is_local() -> None:
+    report = run_checks(
+        env={
+            "CUSTOMER_AI_VECTOR_PROVIDER": "local",
+            "CUSTOMER_AI_QDRANT_URL": "http://qdrant:6333",
+        },
+        timeout_seconds=0.1,
+        http_get=lambda url, headers, timeout_seconds: 200,
+    )
+
+    qdrant_config_check = next(
+        check for check in report["checks"] if check["name"] == "qdrant_runtime_config"
+    )
+    assert report["overall_status"] == "ready"
+    assert qdrant_config_check["status"] == "skipped"
+    assert qdrant_config_check["message"] == (
+        "CUSTOMER_AI_VECTOR_PROVIDER=local does not enable Qdrant"
+    )
+    assert qdrant_config_check["audit"]["evidence"] == "provider_not_enabled"
 
 
 def test_online_rag_eval_reads_jsonl_labeled_samples(tmp_path: Path) -> None:

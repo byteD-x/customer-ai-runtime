@@ -124,7 +124,7 @@
 2. 依次演示知识问答、重复知识问答缓存命中、业务工具查询、风险转人工、队列认领、成本摘要。
 3. `scripts/eval_rag.py` 使用本地标注 eval cases 验证 route、引用关键词、上下文 precision/recall、有效命中率、cohort、人工复核状态、引用准确率、拒答准确率、faithfulness 分数、`offline_accuracy` 和失败明细。
 4. `scripts/eval_online_rag.py` 可读取脱敏线上 JSON/JSONL 标注样本并输出样本级 `online_accuracy`。
-5. `scripts/check_external_readiness.py` 检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置与可达性；未配置时返回 `skipped`，JSON 输出带顶层与逐项 `audit` 元数据用于说明检查范围、依赖环境变量、探针类型和证据口径。
+5. `scripts/check_external_readiness.py` 检查 OpenAI models、OpenAI Admin usage/costs、Qdrant runtime config/health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖的配置、配置一致性与可达性；未配置或未启用对应 provider 时返回 `skipped`，JSON 输出带顶层与逐项 `audit` 元数据用于说明检查范围、依赖环境变量、探针类型和证据口径。
 6. `deploy/k6-smoke.js` 提供健康检查与指标摘要接口的 k6 smoke 模板。
 7. 该链路用于可复现演示，不代表线上准确率、真实成本、外部联调通过或生产压测结果。
 

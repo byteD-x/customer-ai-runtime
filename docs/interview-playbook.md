@@ -107,7 +107,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 5. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期和按 route 聚合。
 6. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`。
 7. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
-8. 外部 readiness：展示未配置外部凭据时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径，强调不冒充真实联调通过。
+8. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
 9. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
 
 **验证命令**
@@ -120,7 +120,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 k6 run deploy\k6-smoke.js
 ```
 
-当前本地实测基线以本节验证命令输出为准；该结果只代表当前本地样例、输入样本和外部依赖配置就绪态，不代表线上准确率、真实成本节省、生产 SLA 或外部 provider 联调结果。
+当前本地实测基线以本节验证命令输出为准；该结果只代表当前本地样例、输入样本、配置一致性和外部依赖配置就绪态，不代表线上准确率、真实成本节省、生产 SLA 或外部 provider 端到端联调结果。
 
 ## 5. Prompt 版本与回滚：如何降低提示词改坏的风险？
 
@@ -217,9 +217,9 @@ k6 run deploy\k6-smoke.js
 - 演示默认使用本地 LLM / Vector / Business provider。
 - 脚本使用临时 storage，不污染本地状态。
 - 输出稳定字段，便于面试时按字段讲架构。
-- 外部 readiness 脚本独立检查 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖；缺少配置时返回 `skipped`，并通过 `audit` 字段说明检查范围、依赖环境变量、探针类型和证据口径，不误报联调通过。
+- 外部 readiness 脚本独立检查 OpenAI models、OpenAI Admin usage/costs、Qdrant runtime config/health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖；缺少配置或未启用对应 provider 时返回 `skipped`，配置不一致或探针失败时返回 `failed`，并通过 `audit` 字段说明检查范围、依赖环境变量、探针类型和证据口径，不误报联调通过。
 
-**可验证结果**：`.venv\Scripts\python.exe examples\interview_demo.py` 退出码为 0，输出关键段落；`.venv\Scripts\python.exe scripts\check_external_readiness.py --json` 在未配置外部凭据时输出 `skipped` 和 `audit` 元数据。
+**可验证结果**：`.venv\Scripts\python.exe examples\interview_demo.py` 退出码为 0，输出关键段落；`.venv\Scripts\python.exe scripts\check_external_readiness.py --json` 在未配置外部凭据或未启用对应 provider 时输出 `skipped` 和 `audit` 元数据。
 
 ## 8. STAR 表达模板
 

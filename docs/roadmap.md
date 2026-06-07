@@ -34,7 +34,7 @@
 9. 人工协同与管理接口联调
 10. 成本治理、知识缓存与业务不缓存联调
 11. RAG eval 与面试 demo 联调
-12. 外部 OpenAI models、OpenAI Admin usage/costs、Qdrant health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖 readiness 检查与审计元数据输出
+12. 外部 OpenAI models、OpenAI Admin usage/costs、Qdrant runtime config/health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖 readiness 检查与审计元数据输出
 13. 线上脱敏样本 RAG eval 与 k6 smoke 模板验证入口
 
 ## 3. 测试顺序
@@ -49,7 +49,7 @@
 8. 人工接管队列测试：优先级、入队时间、技能组过滤、认领状态、`queue_backend`、`atomic_claim`、`consistency_scope`，以及 local / SQLite 后端口径
 9. RAG eval 测试：8 个本地标注 cases、多知识库、cohort、人工复核状态、`offline_accuracy`、命中、低分未命中、引用关键词失败明细、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 分数
 10. 面试 demo 冒烟：输出 route、citations、tool_result、handoff_package、handoff_queue、claimed_session、cost_summary、rag_eval_summary
-11. 外部 readiness 冒烟：未配置凭据时返回 `skipped`，配置后按真实 HTTP/TCP 探针返回，并输出检查范围、依赖环境变量、探针类型和证据口径
+11. 外部 readiness 冒烟：未配置凭据或未启用对应 provider 时返回 `skipped`，配置后按真实 HTTP/TCP 探针或配置一致性检查返回，并输出检查范围、依赖环境变量、探针类型和证据口径
 12. k6 smoke：服务启动后验证健康检查与指标摘要接口，压测结果不外推生产 SLA
 12. 文档一致性核对
 

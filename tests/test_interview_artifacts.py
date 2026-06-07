@@ -210,7 +210,7 @@ def test_external_readiness_skips_missing_optional_credentials() -> None:
     report = run_checks(env={}, timeout_seconds=0.1)
 
     assert report["overall_status"] == "skipped"
-    assert report["status_counts"] == {"skipped": 9}
+    assert report["status_counts"] == {"skipped": 10}
     assert report["audit"]["scope"] == "optional_external_integration_readiness"
     assert report["audit"]["timeout_seconds"] == 0.1
     assert report["audit"]["evidence_level"] == "configuration_and_probe"
@@ -219,6 +219,7 @@ def test_external_readiness_skips_missing_optional_credentials() -> None:
         "openai_models",
         "openai_admin_usage",
         "openai_admin_costs",
+        "qdrant_runtime_config",
         "qdrant_health",
         "qdrant_collections",
         "business_api",
@@ -232,6 +233,12 @@ def test_external_readiness_skips_missing_optional_credentials() -> None:
     assert openai_check["audit"]["probe_type"] == "http_get"
     assert openai_check["audit"]["required_env"] == ["CUSTOMER_AI_OPENAI_API_KEY"]
     assert openai_check["audit"]["evidence"] == "missing_required_env"
+    qdrant_config_check = next(
+        check for check in report["checks"] if check["name"] == "qdrant_runtime_config"
+    )
+    assert qdrant_config_check["audit"]["category"] == "vector_store"
+    assert qdrant_config_check["audit"]["probe_type"] == "configuration"
+    assert qdrant_config_check["audit"]["evidence"] == "provider_not_enabled"
     postgres_check = next(check for check in report["checks"] if check["name"] == "postgres_queue")
     assert postgres_check["audit"]["category"] == "queue_dependency"
     assert postgres_check["audit"]["required_env"] == ["CUSTOMER_AI_POSTGRES_HOST"]

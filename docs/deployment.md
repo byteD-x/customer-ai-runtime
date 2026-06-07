@@ -25,7 +25,7 @@
 - `qdrant`
   用途：向量检索依赖，默认暴露 `6333/6334`
 
-说明：Compose 已提供 Qdrant 服务和默认 `CUSTOMER_AI_QDRANT_URL=http://qdrant:6333`；应用默认仍使用 `local` Vector provider，若要实际联调 Qdrant，需要显式配置 `CUSTOMER_AI_VECTOR_PROVIDER=qdrant` 及必要凭据。
+说明：Compose 已提供 Qdrant 服务和默认 `CUSTOMER_AI_QDRANT_URL=http://qdrant:6333`；应用默认仍使用 `local` Vector provider，若要实际联调 Qdrant，需要显式配置 `CUSTOMER_AI_VECTOR_PROVIDER=qdrant` 及必要凭据。外部 readiness 脚本会分别检查 `qdrant_runtime_config`、`qdrant_health` 和 `qdrant_collections`，用于区分“应用已选择 Qdrant provider”“Qdrant HTTP 健康端点可达”和“collections API 可达”。
 
 关键配置点：
 
@@ -53,6 +53,39 @@ docker compose -f deploy/docker-compose.yml down
 docker compose -f deploy/docker-compose.yml logs -f customer-ai-runtime
 docker compose -f deploy/docker-compose.yml logs -f qdrant
 ```
+
+### 2.1 Qdrant 本地最小联调
+
+在仓库根目录创建或更新 `.env`，最小配置示例：
+
+```dotenv
+CUSTOMER_AI_VECTOR_PROVIDER=qdrant
+CUSTOMER_AI_QDRANT_URL=http://qdrant:6333
+CUSTOMER_AI_QDRANT_API_KEY=
+CUSTOMER_AI_QDRANT_COLLECTION_PREFIX=customer_ai
+```
+
+随后启动 Compose：
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+部署后先运行 readiness：
+
+```bash
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json
+```
+
+本地期望口径：
+
+- `qdrant_runtime_config=passed`：应用启动配置已选择 `CUSTOMER_AI_VECTOR_PROVIDER=qdrant` 且存在 `CUSTOMER_AI_QDRANT_URL`
+- `qdrant_health=passed`：readiness 进程能访问 `${CUSTOMER_AI_QDRANT_URL}/healthz`
+- `qdrant_collections=passed`：readiness 进程能访问 `${CUSTOMER_AI_QDRANT_URL}/collections`
+
+如果在宿主机直接运行 readiness，而 Qdrant 由 Compose 暴露到本机端口，请将宿主机环境中的 `CUSTOMER_AI_QDRANT_URL` 设置为 `http://127.0.0.1:6333`；如果 readiness 在应用容器内运行，则使用 `http://qdrant:6333`。`providers/health` 可用于确认运行时当前选择的 vector provider 与配置就绪态，但它不替代真实知识库写入、检索和引用链路验证。
+
+Compose 为本地调试映射了 Qdrant `6333/6334` 到宿主机，便于在本机运行 readiness 或排障。生产环境建议移除宿主端口映射，仅在 Compose/Kubernetes 内网暴露 Qdrant，并通过网络策略限制访问来源。
 
 ## 3. 环境变量说明
 
@@ -101,6 +134,7 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 - Qdrant
   `CUSTOMER_AI_QDRANT_URL`
   `CUSTOMER_AI_QDRANT_API_KEY`
+  `CUSTOMER_AI_QDRANT_COLLECTION_PREFIX`
 - 外部业务 HTTP API
   `CUSTOMER_AI_BUSINESS_API_BASE_URL`
   `CUSTOMER_AI_BUSINESS_API_KEY`
@@ -218,7 +252,14 @@ k6 run deploy\k6-smoke.js
 
 当前本地实测基线为：`scripts/test.ps1` 通过、RAG eval 8 cases passed、`examples/interview_demo.py` 跑通；`pytest` 数量以实际门禁输出为准。
 
-上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省、外部 provider 联调通过或生产压测结果。`scripts/check_external_readiness.py` 只检查可选外部依赖的配置、HTTP/TCP 可达性和部分权限探针；JSON 输出会在顶层 `audit` 标明检查范围、生成时间、超时和证据等级，并在每个检查项 `audit` 标明依赖环境变量、探针类型和证据口径；未配置凭据时返回 `skipped`。`deploy/k6-smoke.js` 是模板，只有保留真实 k6 输出后才能讨论 p95/p99、QPS 或 SLA。
+上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省、外部 provider 联调通过或生产压测结果。`scripts/check_external_readiness.py` 只检查可选外部依赖的配置一致性、HTTP/TCP 可达性和部分权限探针；其中 `qdrant_runtime_config` 只说明应用是否选择 Qdrant provider 以及 URL 是否存在，`qdrant_health` / `qdrant_collections` 只说明 Qdrant HTTP 探针可达。JSON 输出会在顶层 `audit` 标明检查范围、生成时间、超时和证据等级，并在每个检查项 `audit` 标明依赖环境变量、探针类型和证据口径；未配置或未启用对应 provider 时返回 `skipped`。`deploy/k6-smoke.js` 是模板，只有保留真实 k6 输出后才能讨论 p95/p99、QPS 或 SLA。
+
+## 6.1 Qdrant 常见排查
+
+- `qdrant_runtime_config=skipped` 且 message 提示 `CUSTOMER_AI_VECTOR_PROVIDER=local`：应用仍使用本地向量 provider，需要显式设置 `CUSTOMER_AI_VECTOR_PROVIDER=qdrant`
+- `qdrant_runtime_config=failed`：已选择 Qdrant provider，但缺少 `CUSTOMER_AI_QDRANT_URL`
+- `qdrant_health=failed` 或 `qdrant_collections=failed`：检查 readiness 运行位置使用的 URL 是否正确；宿主机通常用 `http://127.0.0.1:6333`，Compose 网络内通常用 `http://qdrant:6333`
+- `providers/health` 中 vector `ready=true`：只能说明启动配置具备必要字段，不等同于知识库上传、向量写入、检索召回和引用输出端到端通过
 
 ## 7. 当前限制
 
