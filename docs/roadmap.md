@@ -46,7 +46,7 @@
 5. 鉴权桥接测试：API Key、Session、JWT、Custom Token
 6. 语音与 RTC 测试
 7. 成本与缓存测试：知识问答首次/重复、业务查询不缓存、本地模型价格表估算、usage 来源、币种、账期、本地预算阈值和成本摘要聚合
-8. 人工接管队列测试：优先级、入队时间、技能组过滤、认领状态、`queue_backend`、单进程 `atomic_claim` 和 `consistency_scope` 口径
+8. 人工接管队列测试：优先级、入队时间、技能组过滤、认领状态、`queue_backend`、`atomic_claim`、`consistency_scope`，以及 local / SQLite 后端口径
 9. RAG eval 测试：8 个本地标注 cases、多知识库、cohort、人工复核状态、`offline_accuracy`、命中、低分未命中、引用关键词失败明细、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 分数
 10. 面试 demo 冒烟：输出 route、citations、tool_result、handoff_package、handoff_queue、claimed_session、cost_summary、rag_eval_summary
 11. 外部 readiness 冒烟：未配置凭据时返回 `skipped`，配置后按真实 HTTP/TCP 探针返回
@@ -55,7 +55,7 @@
 
 ## 4. Future Target
 
-- 多实例人工接管队列：Redis sorted set、数据库事务或行级锁实现原子认领。
+- 多实例人工接管队列：在当前 SQLite 队列表事务认领基础上，继续落地 Redis sorted set、Postgres 行级锁队列和共享 Session 存储。
 - 真实成本结算：在现有本地模型价格表基础上接入 provider 原生 usage、租户预算、币种和账单周期。
 - 线上 RAG 评估：接入业务标注集、人工复核和灰度流量反馈。
 - 外部系统联调：真实 OpenAI / Qdrant / 业务 API / 客服工单系统配置后再声明通过。

@@ -168,7 +168,7 @@ docker compose -f deploy/docker-compose.yml logs -f qdrant
 - 成本与缓存观察
   通过 `GET /api/v1/admin/costs/summary` 查看当前诊断样本中的 token、估算成本、缓存命中和预算告警
 - 人工接管队列
-  通过 `GET /api/v1/admin/handoff/queue` 查看单实例等待队列，通过 `POST /api/v1/admin/handoff/claim-next` 做管理端认领
+  通过 `GET /api/v1/admin/handoff/queue` 查看等待队列，通过 `POST /api/v1/admin/handoff/claim-next` 做管理端认领。默认 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`，可设置为 `sqlite` 验证共享队列表事务认领。
 - 告警拉取
   通过 `GET /api/v1/admin/alerts` 拉取 provider 未就绪、错误诊断、等待人工会话等告警线索
   告警阈值可通过 `PUT /api/v1/admin/runtime-config` 的 `alerts` 字段热更新
@@ -201,7 +201,7 @@ curl -H "X-API-Key: <your-admin-key>" http://127.0.0.1:8000/api/v1/admin/alerts
 - `providers/health` 返回各提供商 `ready` 状态
 - `metrics/summary` 返回计数器、会话摘要和诊断摘要
 - `costs/summary` 返回当前样本的 token、估算成本、缓存命中和预算告警
-- `handoff/queue` 返回当前租户等待人工接管的单实例队列；无等待会话时为空数组
+- `handoff/queue` 返回当前租户等待人工接管队列；无等待会话时为空数组，并通过 `queue_backend` / `consistency_scope` 暴露当前后端口径
 - `alerts` 返回需要运维关注的问题列表；无异常时可为空数组
 
 本地演示与评测验证：
@@ -227,7 +227,7 @@ k6 run deploy\k6-smoke.js
 - 观测能力以管理接口和本地持久化事件为主，尚未内建 Prometheus exporter
 - Docker Compose 适合单机或小规模环境，不等同于高可用生产集群方案
 - 当前存储层仍以本地 JSON 仓储为主，更适合开发、演示和轻量部署
-- 当前人工接管队列基于本地 `Session` 状态排序，提供单进程原子认领；未提供多实例原子认领
+- 当前人工接管队列默认基于本地 `Session` 状态排序，提供单进程认领；可选 SQLite 队列表提供事务认领，但不代表 JSON Session 仓储已具备完整多实例强一致
 - 当前成本统计支持本地模型价格表估算和 provider usage 治理入口，未接入真实租户账单结算
 - 当前 RAG eval 为离线本地标注样例脚本，包含 cohort、人工复核状态、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 字段；online eval 只代表输入的脱敏样本，未接入真实业务标注集、线上灰度流量和人工复核系统
 
@@ -244,7 +244,7 @@ k6 run deploy\k6-smoke.js
 以下属于未来目标，不代表当前仓库已落地：
 
 - 多实例无状态部署与共享持久化后端
-- 多实例人工队列与原子认领
+- Redis/Postgres 多实例人工队列、原子认领与共享 Session 存储
 - 基于 provider 原生 usage、租户预算、币种和账单周期的真实成本结算
 - 基于业务标注集和线上灰度流量的 RAG 质量评估
 - Prometheus / Grafana 原生指标暴露

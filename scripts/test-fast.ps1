@@ -50,6 +50,8 @@ function Resolve-PytestArgs {
                     "tests/test_runtime_api.py::test_handoff_flow",
                     "tests/test_runtime_api.py::test_message_feedback_can_request_human_handoff",
                     "tests/test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group",
+                    "tests/test_runtime_api.py::test_sqlite_handoff_queue_supports_shared_transaction_claim",
+                    "tests/test_runtime_api.py::test_handoff_queue_can_use_sqlite_backend_from_settings",
                     "tests/test_runtime_api.py::test_handoff_service_uses_injected_queue_backend"
                 )
             }

@@ -19,6 +19,8 @@ SUITE_TARGETS = {
         "tests/test_runtime_api.py::test_handoff_flow",
         "tests/test_runtime_api.py::test_message_feedback_can_request_human_handoff",
         "tests/test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group",
+        "tests/test_runtime_api.py::test_sqlite_handoff_queue_supports_shared_transaction_claim",
+        "tests/test_runtime_api.py::test_handoff_queue_can_use_sqlite_backend_from_settings",
         "tests/test_runtime_api.py::test_handoff_service_uses_injected_queue_backend",
     ),
     "rag": (
@@ -199,7 +201,7 @@ def _suites_for_source_path(path: str) -> tuple[str, ...]:
     if path == "src/customer_ai_runtime/application/tool_catalog.py":
         return ("api",)
     if path == "src/customer_ai_runtime/application/container.py":
-        return ("api", "providers")
+        return ("api", "handoff", "providers")
     if path.startswith("src/customer_ai_runtime/application/"):
         suite = _suite_for_application_path(path)
         return () if suite is None else (suite,)

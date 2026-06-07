@@ -409,13 +409,13 @@
 
 ### `GET /api/v1/admin/handoff/queue`
 
-- 用途：查看当前等待人工接管的单实例轻量队列
+- 用途：查看当前等待人工接管队列；默认 `local` 为单实例轻量队列，可选 `sqlite` 为共享队列表
 - 权限：`admin` / `operator`
 - 查询参数：
   - `tenant_id`
   - `skill_group`（可选）
 - 排序规则：优先级倒序，同优先级按 `handoff_enqueued_at` 先后排序
-- 入队来源：聊天自动转人工、`POST /api/v1/chat/handoff` 和 `request_human` 反馈均通过 `HandoffQueueBackend.enqueue` 写入队列；当前默认后端仍为 `local`
+- 入队来源：聊天自动转人工、`POST /api/v1/chat/handoff` 和 `request_human` 反馈均通过 `HandoffQueueBackend.enqueue` 写入队列；当前默认后端仍为 `local`，可通过 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=sqlite` 启用 SQLite 共享队列表
 - 返回重点：
   - `session_id`
   - `skill_group`
@@ -423,9 +423,9 @@
   - `handoff_reason`
   - `enqueued_at`
   - `assigned_operator_id`
-  - `queue_backend`：当前默认 `local`
-  - `atomic_claim`：当前默认 `true`，表示单进程锁内认领，不代表多实例队列一致性
-  - `consistency_scope`：当前为 `single_process`，用于明确一致性边界
+  - `queue_backend`：当前默认 `local`；可选 `sqlite`
+  - `atomic_claim`：当前默认 `true`；`local` 表示单进程锁内认领，`sqlite` 表示 SQLite 队列表事务认领
+  - `consistency_scope`：当前默认 `single_process`；SQLite 后端返回 `shared_sqlite_queue`，用于明确一致性边界
 
 ### `POST /api/v1/admin/handoff/claim-next`
 

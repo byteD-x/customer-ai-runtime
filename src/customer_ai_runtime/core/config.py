@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     trust_x_forwarded_for: bool = False
     max_request_bytes: int = 3_000_000
     diagnostics_export_path: str | None = None
+    handoff_queue_backend: str = "local"
     model_input_cost_per_1k_cents: float = 0.1
     model_output_cost_per_1k_cents: float = 0.1
     model_price_map_json: str = "{}"

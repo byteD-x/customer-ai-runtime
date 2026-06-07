@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,10 @@ from fastapi.testclient import TestClient
 from customer_ai_runtime.app import create_app
 from customer_ai_runtime.application.auth import AuthBridgePlugin
 from customer_ai_runtime.application.container import ContainerOverrides, build_container
+from customer_ai_runtime.application.handoff_queue import SQLiteHandoffQueueBackend
 from customer_ai_runtime.application.plugins import PluginDescriptor
+from customer_ai_runtime.application.runtime import DiagnosticsService
+from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.core.config import get_settings
 from customer_ai_runtime.domain.models import Session, SessionState, utcnow
 from customer_ai_runtime.domain.platform import (
@@ -23,6 +27,10 @@ from customer_ai_runtime.domain.platform import (
     ResolvedAuthContext,
 )
 from customer_ai_runtime.integration import CustomerAIRuntimeModule
+from customer_ai_runtime.repositories.memory import (
+    InMemoryDiagnosticsRepository,
+    InMemorySessionRepository,
+)
 
 CUSTOMER_HEADERS = {"X-API-Key": "demo-public-key"}
 ADMIN_HEADERS = {"X-API-Key": "demo-admin-key"}
@@ -1473,6 +1481,105 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     )
     assert after_claim.status_code == 200
     assert all(item["session_id"] != claimed["session_id"] for item in after_claim.json()["data"])
+
+
+def test_sqlite_handoff_queue_supports_shared_transaction_claim(tmp_path: Path) -> None:
+    storage_root = tmp_path / "storage"
+    diagnostics = DiagnosticsService(InMemoryDiagnosticsRepository())
+    producer_sessions = SessionService(InMemorySessionRepository(), diagnostics)
+    producer_queue = SQLiteHandoffQueueBackend(producer_sessions, storage_root)
+    first_enqueued_at = utcnow()
+
+    after_sales = Session(tenant_id="demo-tenant", channel="web")
+    after_sales.handoff_enqueued_at = first_enqueued_at
+    risk = Session(tenant_id="demo-tenant", channel="web")
+    risk.handoff_enqueued_at = first_enqueued_at + timedelta(seconds=1)
+
+    producer_queue.enqueue(
+        after_sales,
+        reason="request_human",
+        skill_group="after_sales",
+        priority=20,
+    )
+    producer_queue.enqueue(
+        risk,
+        reason="risk_keyword",
+        skill_group="risk",
+        priority=90,
+    )
+
+    consumer_sessions = SessionService(InMemorySessionRepository(), diagnostics)
+    consumer_queue = SQLiteHandoffQueueBackend(consumer_sessions, storage_root)
+    queue_data = consumer_queue.list_waiting("demo-tenant")
+    assert [session.session_id for session in queue_data] == [
+        risk.session_id,
+        after_sales.session_id,
+    ]
+
+    filtered = consumer_queue.list_waiting("demo-tenant", skill_group="after_sales")
+    assert [session.session_id for session in filtered] == [after_sales.session_id]
+
+    claimed = consumer_queue.claim_next(
+        "demo-tenant",
+        skill_group="after_sales",
+        operator_id="op_sqlite",
+    )
+    assert claimed is not None
+    assert claimed.session_id == after_sales.session_id
+    assert claimed.state == SessionState.HUMAN_IN_SERVICE
+    assert claimed.waiting_human is False
+    assert claimed.assigned_operator_id == "op_sqlite"
+
+    stored = consumer_sessions.get("demo-tenant", after_sales.session_id)
+    assert stored.state == SessionState.HUMAN_IN_SERVICE
+    assert consumer_queue.claim_next("demo-tenant", skill_group="after_sales") is None
+    assert [session.session_id for session in producer_queue.list_waiting("demo-tenant")] == [
+        risk.session_id
+    ]
+
+
+def test_handoff_queue_can_use_sqlite_backend_from_settings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUSTOMER_AI_STORAGE_ROOT", str(tmp_path / "storage"))
+    monkeypatch.setenv("CUSTOMER_AI_HANDOFF_QUEUE_BACKEND", "sqlite")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as local_client:
+        response = local_client.post(
+            "/api/v1/chat/messages",
+            headers=CUSTOMER_HEADERS,
+            json={
+                "tenant_id": "demo-tenant",
+                "channel": "web",
+                "message": "\u6211\u8981\u8f6c\u4eba\u5de5\u5ba2\u670d",
+            },
+        )
+        assert response.status_code == 200
+
+        queue = local_client.get(
+            "/api/v1/admin/handoff/queue",
+            headers=ADMIN_HEADERS,
+            params={"tenant_id": "demo-tenant"},
+        )
+        assert queue.status_code == 200
+        queue_data = queue.json()["data"]
+        assert len(queue_data) == 1
+        assert queue_data[0]["queue_backend"] == "sqlite"
+        assert queue_data[0]["atomic_claim"] is True
+        assert queue_data[0]["consistency_scope"] == "shared_sqlite_queue"
+
+        claim = local_client.post(
+            "/api/v1/admin/handoff/claim-next",
+            headers=ADMIN_HEADERS,
+            params={"tenant_id": "demo-tenant", "operator_id": "op_sqlite"},
+        )
+        assert claim.status_code == 200
+        claimed = claim.json()["data"]
+        assert claimed["state"] == "human_in_service"
+        assert claimed["queue_backend"] == "sqlite"
+        assert claimed["assigned_operator_id"] == "op_sqlite"
+    get_settings.cache_clear()
 
 
 def test_handoff_service_uses_injected_queue_backend(

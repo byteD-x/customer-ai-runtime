@@ -20,6 +20,7 @@ from customer_ai_runtime.application.handoff import HandoffService
 from customer_ai_runtime.application.handoff_queue import (
     HandoffQueueBackend,
     LocalHandoffQueueBackend,
+    SQLiteHandoffQueueBackend,
 )
 from customer_ai_runtime.application.ingestion import DocumentIngestionService
 from customer_ai_runtime.application.knowledge import KnowledgeService
@@ -147,7 +148,7 @@ def build_container(settings: Settings, overrides: ContainerOverrides | None = N
     tool_catalog = ToolCatalogService(plugin_registry)
 
     session_service = SessionService(session_repository, diagnostics)
-    handoff_queue = overrides.handoff_queue or LocalHandoffQueueBackend(session_service)
+    handoff_queue = overrides.handoff_queue or _build_handoff_queue(settings, session_service)
     knowledge_service = KnowledgeService(knowledge_repository, vector_store)
     industry_service = IndustryService(plugin_registry)
     business_context_builder = BusinessContextBuilder(plugin_registry, industry_service)
@@ -292,3 +293,13 @@ def _build_business_adapter(settings: Settings) -> BusinessAdapter:
 
         return GrpcBusinessAdapter(settings)
     return LocalBusinessAdapter()
+
+
+def _build_handoff_queue(
+    settings: Settings,
+    session_service: SessionService,
+) -> HandoffQueueBackend:
+    backend = settings.handoff_queue_backend.strip().lower()
+    if backend == "sqlite":
+        return SQLiteHandoffQueueBackend(session_service, settings.storage_root)
+    return LocalHandoffQueueBackend(session_service)

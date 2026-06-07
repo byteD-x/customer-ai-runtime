@@ -93,7 +93,7 @@ python -m compileall -q src tests
 - `auto`：根据当前 `git status` 自动选择最小 pytest 目标，包含未跟踪的新文件；无法安全归类时回退完整 `pytest tests`。
 - `stream`：文本知识问答 + 流式 Chat 正常/错误事件，默认 suite。
 - `api`：完整 runtime API 集成测试。
-- `handoff`：人工接管、反馈转人工、队列排序/认领和队列后端注入测试。
+- `handoff`：人工接管、反馈转人工、local/SQLite 队列排序/认领和队列后端注入测试。
 - `rag`：RAG 质量与面试材料一致性测试。
 - `agent`：受控多工具工作流测试。
 - `providers`：可选 provider、云厂商 speech provider 与 OpenAI prompt 组装测试。
@@ -121,7 +121,7 @@ python -m compileall -q src tests
 - 业务工具查询必须保持 `cache_hit=false`，避免缓存实时订单/售后状态
 - 成本摘要应按 provider、route 聚合 token、usage 来源、币种、账期、本地预算阈值、基于本地模型价格表的估算成本和缓存命中
 - Prompt revision 摘要和 diff 接口不得返回 Prompt 原文；应覆盖 unknown revision、空账本、损坏账本和 active revision 不唯一等治理异常
-- 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领，并返回 `queue_backend` / `atomic_claim` / `consistency_scope` 当前后端口径
+- 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领，并返回 `queue_backend` / `atomic_claim` / `consistency_scope` 当前后端口径；SQLite 后端需覆盖共享队列表事务认领，默认 local 后端仍只代表单进程锁内认领
 - RAG eval 应覆盖 8 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy` 和 `faithfulness_score`
 - Chat 知识回复缺少有效引用时应返回 `refusal=true`、`refusal_reason`、空 `citations` / `references`，避免无证据强答
 - 外部 readiness 脚本在缺少 OpenAI / OpenAI Admin / Qdrant / 业务 API / 工单 API / Redis / Postgres 配置时应返回 `skipped`，配置后按真实 HTTP/TCP 探针返回 `passed` 或 `failed`

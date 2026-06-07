@@ -71,7 +71,7 @@
 
 - Session 增加 handoff reason、skill group、priority、enqueued_at、assigned_operator_id。
 - `handoff_package` 增加情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号，便于人工客服接手。
-- 队列按风险优先级倒序、同优先级按入队时间排序；支持 `skill_group` 过滤和 `claim-next`，返回 `queue_backend=local`、单进程 `atomic_claim=true` 与 `consistency_scope=single_process` 口径。
+- 队列按风险优先级倒序、同优先级按入队时间排序；支持 `skill_group` 过滤和 `claim-next`，返回 `queue_backend`、`atomic_claim=true` 与 `consistency_scope` 口径。默认 `local` 为单进程认领，可选 `sqlite` 使用共享队列表事务认领。
 - 风险类关键词会进入 `risk` 技能组，认领后状态从 `waiting_human` 变为 `human_in_service`。
 
 **代码证据**
@@ -81,17 +81,19 @@
 - `src/customer_ai_runtime/application/admin.py`
 - `src/customer_ai_runtime/application/session.py`
 - `tests/test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group`
+- `tests/test_runtime_api.py::test_sqlite_handoff_queue_supports_shared_transaction_claim`
+- `tests/test_runtime_api.py::test_handoff_queue_can_use_sqlite_backend_from_settings`
 
 **验证命令**
 
 ```powershell
-.venv\Scripts\python.exe -m pytest tests\test_runtime_api.py::test_handoff_queue_orders_and_claims_by_skill_group
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 ```
 
 **面试官可能追问**
 
 - 问：多实例下怎么保证 claim-next 不重复？
-- 答：当前是单实例本地可验证实现；`atomic_claim=true` 只表示 local 后端在单进程锁内认领，`consistency_scope=single_process` 明确一致性边界。多实例 future target 是 Redis sorted set 或数据库行级锁，按 priority/enqueued_at 排序并用原子 pop/事务认领。
+- 答：默认 `local` 后端只保证单进程锁内认领，`consistency_scope=single_process` 明确一致性边界；可选 `sqlite` 后端把等待队列写入 `<storage_root>/state/handoff_queue.sqlite3`，使用 SQLite 事务做共享队列表认领，`consistency_scope=shared_sqlite_queue`。但它只覆盖队列层，不等于完整多实例 Session 存储；Redis sorted set / Postgres 行级锁和共享 Session 仓储仍是下一阶段。
 
 ## 4. 演示闭环：现场怎么讲？
 
@@ -201,9 +203,9 @@ k6 run deploy\k6-smoke.js
 - `Session` 增加 handoff reason、skill group、priority、enqueued_at、assigned_operator_id。
 - `HandoffPackage` 补充 sentiment、issue_summary、last_user_message、related_business_objects、page_context、behavior_signals。
 - 管理端 queue 按 priority 倒序、同优先级按入队时间排序。
-- `claim-next` 认领后切换为 `human_in_service` 并记录 operator，队列响应带 `queue_backend` 和单进程 `atomic_claim` 口径。
+- `claim-next` 认领后切换为 `human_in_service` 并记录 operator，队列响应带 `queue_backend`、`atomic_claim` 和 `consistency_scope` 口径。
 
-**可验证结果**：`test_handoff_queue_orders_and_claims_by_skill_group` 覆盖风险优先、技能组过滤和认领状态。
+**可验证结果**：`test_handoff_queue_orders_and_claims_by_skill_group` 覆盖风险优先、技能组过滤和认领状态；SQLite 后端测试覆盖共享队列表排序、过滤、事务认领和容器配置选择。
 
 ### 难点 4：面试演示必须可复现
 
@@ -253,5 +255,5 @@ k6 run deploy\k6-smoke.js
 - 当前本地 JSON 存储适合开发、演示和单实例部署；多实例强一致不是当前事实。
 - 当前 RAG eval 是本地标注样例，online eval 只代表导入的脱敏样本，不代表全量线上准确率。
 - 当前成本支持本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值；真实账单仍需要接模型供应商 usage、币种、租户预算和结算周期。
-- 当前 `queue_backend=local`、`atomic_claim=true`、`consistency_scope=single_process` 只代表单进程锁内认领边界，不代表多实例强一致队列。
-- Redis queue、Postgres repository、真实客服工单系统、Qdrant/OpenAI 端到端联调和生产压测均可作为下一阶段扩展，不写成已完成能力。
+- 当前 `queue_backend=local`、`consistency_scope=single_process` 只代表单进程锁内认领边界；`queue_backend=sqlite`、`consistency_scope=shared_sqlite_queue` 只代表共享 SQLite 队列表事务认领，不代表完整多实例 Session 存储强一致。
+- Redis queue、Postgres repository、共享 Session 存储、真实客服工单系统、Qdrant/OpenAI 端到端联调和生产压测均可作为下一阶段扩展，不写成已完成能力。

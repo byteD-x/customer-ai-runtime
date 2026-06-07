@@ -34,7 +34,7 @@
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
 - **低成本治理** - 文本链路记录 LLM token、usage 来源、币种、账期、可配置模型价格估算、缓存命中与预算告警；知识问答安全缓存，业务查询保持实时不缓存，并在管理端输出单实例缓存运行时统计
 - **可复现 RAG 评测** - 提供 8 个本地标注 eval cases 与脚本，覆盖多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、上下文 precision/recall、有效命中率和失败明细
-- **人工接管队列** - 基于 Session 的单实例本地队列，入队动作已收敛到 `HandoffQueueBackend.enqueue` 并支持容器注入，当前支持技能组、优先级、等待时间排序和单进程原子 claim-next 认领
+- **人工接管队列** - 入队动作已收敛到 `HandoffQueueBackend.enqueue` 并支持容器注入；默认 `local` 后端基于 Session 单进程认领，可选 `sqlite` 后端提供共享队列表事务认领
 - **受控 Agent 工具流** - 支持白名单工具顺序编排、步骤上限、失败停止和 HTTP trace 返回，默认仅 `admin` / `operator` 可调用
 
 ## 架构概览
@@ -346,6 +346,8 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 ```
 
 `scripts/test-fast.ps1` 用于开发中的目标化回归，不替代 `scripts/test.ps1` 完整质量门禁。`-Suite auto` 会基于当前 `git status` 自动选择最小 pytest 目标，包括未跟踪的新文件；无法安全归类的运行时代码、依赖、CI 或门禁脚本变更会回退到完整 `pytest tests`。默认超时为 120 秒，可通过 `-TimeoutSeconds` 调整；超时时脚本返回退出码 `124` 并输出已捕获的 pytest stdout/stderr。
+
+人工接管队列默认使用 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`；需要验证共享队列表事务认领时可设置为 `sqlite`，队列文件位于 `<storage_root>/state/handoff_queue.sqlite3`。该后端只覆盖人工接管队列的入队与 `claim-next` 认领，不代表 Session JSON 仓储已经具备完整多实例强一致能力。
 
 ## 行业支持
 
