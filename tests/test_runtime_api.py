@@ -36,6 +36,12 @@ CUSTOMER_HEADERS = {"X-API-Key": "demo-public-key"}
 ADMIN_HEADERS = {"X-API-Key": "demo-admin-key"}
 
 
+def assert_queue_wait_seconds(item: dict[str, object]) -> None:
+    wait_seconds = item["queue_wait_seconds"]
+    assert isinstance(wait_seconds, int)
+    assert wait_seconds >= 0
+
+
 class RecordingHandoffQueue:
     name = "recording"
     atomic_claim = False
@@ -1636,6 +1642,7 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     assert queue_data[0]["queue_backend"] == "local"
     assert queue_data[0]["atomic_claim"] is True
     assert queue_data[0]["consistency_scope"] == "single_process"
+    assert_queue_wait_seconds(queue_data[0])
 
     filtered = client.get(
         "/api/v1/admin/handoff/queue",
@@ -1664,6 +1671,7 @@ def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> N
     assert claimed["queue_backend"] == "local"
     assert claimed["atomic_claim"] is True
     assert claimed["consistency_scope"] == "single_process"
+    assert_queue_wait_seconds(claimed)
 
     after_claim = client.get(
         "/api/v1/admin/handoff/queue",
@@ -1759,6 +1767,7 @@ def test_handoff_queue_can_use_sqlite_backend_from_settings(
         assert queue_data[0]["queue_backend"] == "sqlite"
         assert queue_data[0]["atomic_claim"] is True
         assert queue_data[0]["consistency_scope"] == "shared_sqlite_queue"
+        assert_queue_wait_seconds(queue_data[0])
 
         claim = local_client.post(
             "/api/v1/admin/handoff/claim-next",
@@ -1770,6 +1779,7 @@ def test_handoff_queue_can_use_sqlite_backend_from_settings(
         assert claimed["state"] == "human_in_service"
         assert claimed["queue_backend"] == "sqlite"
         assert claimed["assigned_operator_id"] == "op_sqlite"
+        assert_queue_wait_seconds(claimed)
     get_settings.cache_clear()
 
 
@@ -1817,6 +1827,7 @@ def test_handoff_service_uses_injected_queue_backend(
         assert queue_data[0]["queue_backend"] == "recording"
         assert queue_data[0]["atomic_claim"] is False
         assert queue_data[0]["consistency_scope"] == "test_backend"
+        assert_queue_wait_seconds(queue_data[0])
     get_settings.cache_clear()
 
 

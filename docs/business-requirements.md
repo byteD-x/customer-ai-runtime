@@ -183,7 +183,7 @@
 - 知识问答缓存命中率：知识类请求中命中安全缓存的比例
 - 单轮估算成本：按 provider / route 聚合 token、usage 来源、币种、账期、本地预算阈值与估算成本
 - RAG eval 通过率 / `offline_accuracy`：本地标注 case 中 route、引用关键词、有效命中、拒答期望和 faithfulness 门禁均通过的比例；`context_precision` / `context_recall` 作为本地启发式报告指标，用于观察额外无关引用和上下文遗漏
-- 人工接管等待时长：按技能组统计 waiting_human 到 claim-next 的等待时间；当前 `atomic_claim` 只代表单进程锁内认领，`consistency_scope=single_process` 明确一致性边界
+- 人工接管等待时长：管理端队列项当前返回 `queue_wait_seconds` 作为本地等待时长观测；后续可继续按技能组统计 waiting_human 到 claim-next 的等待时间；当前 `atomic_claim` 只代表单进程锁内认领，`consistency_scope=single_process` 明确一致性边界
 
 ## 8. 最小安全模型
 

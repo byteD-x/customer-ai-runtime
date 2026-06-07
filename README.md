@@ -34,7 +34,7 @@
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
 - **低成本治理** - 文本链路记录 LLM token、usage 来源、币种、账期、可配置模型价格估算、缓存命中与预算告警；支持导入 provider billing 样本并在管理端区分本地估算成本、provider 账单样本金额和诊断样本差异；导入响应会返回非阻断的 `quality_issue_count` / `quality_issues`，用于提示本地样本质量问题；知识问答安全缓存，业务查询保持实时不缓存，并输出单实例缓存运行时统计
 - **可复现 RAG 评测** - 提供 8 个本地标注 eval cases 与脚本，覆盖多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、上下文 precision/recall、有效命中率和失败明细
-- **人工接管队列** - 入队动作已收敛到 `HandoffQueueBackend.enqueue` 并支持容器注入；默认 `local` 后端基于 Session 单进程认领，可选 `sqlite` 后端提供共享队列表事务认领
+- **人工接管队列** - 入队动作已收敛到 `HandoffQueueBackend.enqueue` 并支持容器注入；默认 `local` 后端基于 Session 单进程认领，可选 `sqlite` 后端提供共享队列表事务认领；管理端队列项返回本地观测字段 `queue_wait_seconds`
 - **受控 Agent 工具流** - 支持白名单工具顺序编排、步骤上限、失败停止和 HTTP trace 返回，默认仅 `admin` / `operator` 可调用
 
 ## 架构概览
@@ -356,7 +356,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
 `scripts/quality/run_pytest_groups.py` 用于把较长 pytest 任务拆成命名分组并定位卡住或失败的分组；每组保留 stdout/stderr 日志，heartbeat 输出日志字节数与 idle 秒数，失败或超时时只打印有限尾部。该工具用于提速排障，不替代提交前的完整 `scripts/test.ps1`。
 
-人工接管队列默认使用 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`；需要验证共享队列表事务认领时可设置为 `sqlite`，队列文件位于 `<storage_root>/state/handoff_queue.sqlite3`。该后端只覆盖人工接管队列的入队与 `claim-next` 认领，不代表 Session JSON 仓储已经具备完整多实例强一致能力。
+人工接管队列默认使用 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=local`；需要验证共享队列表事务认领时可设置为 `sqlite`，队列文件位于 `<storage_root>/state/handoff_queue.sqlite3`。管理端队列项会基于 `handoff_enqueued_at` 返回 `queue_wait_seconds`，用于本地查看等待时长。该后端只覆盖人工接管队列的入队与 `claim-next` 认领，不代表 Session JSON 仓储已经具备完整多实例强一致能力。
 
 ## 行业支持
 

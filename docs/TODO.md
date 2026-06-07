@@ -19,7 +19,7 @@
 - RAG 文件上传解析：文本 / Markdown 已可走上传入口，PDF / Word 依赖 `providers` extra
 - AgentWorkflow HTTP API：顺序工具步骤、工具白名单、步骤上限、失败停止与 trace
 - 结构化交接包：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文和行为信号
-- 人工接管队列：`HandoffQueueBackend.enqueue` 入队契约、技能组、优先级、默认 local 单进程 `claim-next`，以及可选 SQLite 共享队列表事务认领，返回当前后端 `consistency_scope`
+- 人工接管队列：`HandoffQueueBackend.enqueue` 入队契约、技能组、优先级、默认 local 单进程 `claim-next`，以及可选 SQLite 共享队列表事务认领，返回当前后端 `consistency_scope` 和本地等待时长观测字段 `queue_wait_seconds`
 - 外部 readiness 脚本：OpenAI models、OpenAI Admin usage/costs、Qdrant runtime config/health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖未配置或未启用对应 provider 时返回 `skipped`，JSON 输出包含检查范围、依赖环境变量、探针类型和证据口径等审计元数据
 - 线上 RAG 样本评估入口：`scripts/eval_online_rag.py` 读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`
 - k6 smoke 模板：`deploy/k6-smoke.js` 可对健康检查和管理端指标摘要做可复现压测入口

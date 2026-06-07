@@ -18,7 +18,7 @@
 - `handoff_enqueued_at`
 - `assigned_operator_id`
 
-管理端 `GET /api/v1/admin/handoff/queue` 基于当前租户的等待队列排序；`POST /api/v1/admin/handoff/claim-next` 认领后把会话状态切到 `human_in_service`。默认返回 `queue_backend=local`、`atomic_claim=true` 和 `consistency_scope=single_process`，其中 `atomic_claim` 只表示单进程锁内认领。设置 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=sqlite` 后，会使用 `<storage_root>/state/handoff_queue.sqlite3` 保存等待队列表和 Session 快照，并返回 `queue_backend=sqlite`、`consistency_scope=shared_sqlite_queue`，用于验证共享队列表的事务认领。该 SQLite 后端只覆盖人工接管队列，不代表当前 JSON Session 仓储已经具备完整多实例强一致能力。
+管理端 `GET /api/v1/admin/handoff/queue` 基于当前租户的等待队列排序，并基于 `handoff_enqueued_at` 返回本地等待时长观测字段 `queue_wait_seconds`；`POST /api/v1/admin/handoff/claim-next` 认领后把会话状态切到 `human_in_service`。默认返回 `queue_backend=local`、`atomic_claim=true` 和 `consistency_scope=single_process`，其中 `atomic_claim` 只表示单进程锁内认领。设置 `CUSTOMER_AI_HANDOFF_QUEUE_BACKEND=sqlite` 后，会使用 `<storage_root>/state/handoff_queue.sqlite3` 保存等待队列表和 Session 快照，并返回 `queue_backend=sqlite`、`consistency_scope=shared_sqlite_queue`，用于验证共享队列表的事务认领。该 SQLite 后端只覆盖人工接管队列，不代表当前 JSON Session 仓储已经具备完整多实例强一致能力。
 
 ## 2. 已知限制
 

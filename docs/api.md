@@ -451,6 +451,7 @@
   - `priority`
   - `handoff_reason`
   - `enqueued_at`
+  - `queue_wait_seconds`：基于 `handoff_enqueued_at` 计算的本地等待秒数，用于管理端观测
   - `assigned_operator_id`
   - `queue_backend`：当前默认 `local`；可选 `sqlite`
   - `atomic_claim`：当前默认 `true`；`local` 表示单进程锁内认领，`sqlite` 表示 SQLite 队列表事务认领

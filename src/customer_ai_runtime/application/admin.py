@@ -19,7 +19,7 @@ from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.application.tool_catalog import ToolCatalogService
 from customer_ai_runtime.application.voice_rtc import RTCService
 from customer_ai_runtime.core.config import Settings
-from customer_ai_runtime.domain.models import DiagnosticLevel, Session
+from customer_ai_runtime.domain.models import DiagnosticLevel, Session, utcnow
 
 
 def _percentile_ms(values: list[int], quantile: float) -> float | None:
@@ -931,6 +931,12 @@ class AdminService:
         return self.plugin_registry.disable(plugin_id).model_dump(mode="json")
 
     def _handoff_queue_item(self, session: Session) -> dict[str, Any]:
+        queue_wait_seconds = 0
+        if session.handoff_enqueued_at is not None:
+            queue_wait_seconds = max(
+                0,
+                int((utcnow() - session.handoff_enqueued_at).total_seconds()),
+            )
         return {
             "tenant_id": session.tenant_id,
             "session_id": session.session_id,
@@ -942,6 +948,7 @@ class AdminService:
             "enqueued_at": None
             if session.handoff_enqueued_at is None
             else session.handoff_enqueued_at.isoformat(),
+            "queue_wait_seconds": queue_wait_seconds,
             "assigned_operator_id": session.assigned_operator_id,
             "message_count": len(session.messages),
             "last_intent": session.last_intent,
