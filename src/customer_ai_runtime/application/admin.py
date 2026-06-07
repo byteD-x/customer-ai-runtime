@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import UTC, datetime
 from typing import Any
 
 from customer_ai_runtime.application.handoff_queue import (
@@ -50,6 +51,24 @@ def _cost_reconciliation(
         "variance_ratio": None if estimated_cost == 0 else round(variance / estimated_cost, 6),
         "has_provider_billing_sample": has_provider_billing_sample,
     }
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    elif not isinstance(value, str) or not value.strip():
+        return None
+    else:
+        normalized = value.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 class AdminService:
@@ -142,8 +161,11 @@ class AdminService:
                 context,
             )
             imported_records.append(context)
+        quality_issues = self._provider_billing_quality_issues(records)
         return {
             "imported_count": len(imported_records),
+            "quality_issue_count": len(quality_issues),
+            "quality_issues": quality_issues,
             "records": imported_records,
         }
 
@@ -974,6 +996,121 @@ class AdminService:
         )
         bucket["cost_variance_cents"] = reconciliation["variance_cents"]
         bucket["cost_variance_ratio"] = reconciliation["variance_ratio"]
+
+    def _provider_billing_quality_issues(
+        self,
+        records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        currencies: dict[str, list[int]] = {}
+        periods: dict[str, list[int]] = {}
+        external_ids: dict[str, list[int]] = {}
+        for index, record in enumerate(records):
+            currency = str(record.get("billing_currency") or "").strip()
+            if currency:
+                currencies.setdefault(currency, []).append(index)
+            period = str(record.get("billing_period") or "").strip()
+            if period:
+                periods.setdefault(period, []).append(index)
+            external_record_id = str(record.get("external_record_id") or "").strip()
+            if external_record_id:
+                external_ids.setdefault(external_record_id, []).append(index)
+            else:
+                issues.append(
+                    {
+                        "code": "missing_external_record_id",
+                        "severity": "warning",
+                        "message": "external_record_id is missing, making de-duplication harder",
+                        "field": "external_record_id",
+                        "record_indexes": [index],
+                    }
+                )
+
+            if (
+                int(record.get("total_tokens") or 0) == 0
+                and float(record.get("billed_cost_cents") or 0.0) > 0
+            ):
+                issues.append(
+                    {
+                        "code": "zero_tokens_with_billed_cost",
+                        "severity": "warning",
+                        "message": "record has billed cost but total_tokens is zero or missing",
+                        "field": "total_tokens",
+                        "record_indexes": [index],
+                    }
+                )
+
+            usage_start = _parse_datetime(record.get("usage_start"))
+            usage_end = _parse_datetime(record.get("usage_end"))
+            if usage_start is not None and usage_end is not None and usage_start > usage_end:
+                issues.append(
+                    {
+                        "code": "usage_window_invalid",
+                        "severity": "warning",
+                        "message": "usage_start is later than usage_end",
+                        "field": "usage_start",
+                        "record_indexes": [index],
+                    }
+                )
+
+            if not any(
+                str(record.get(field) or "").strip()
+                for field in ("session_id", "external_record_id", "route", "model")
+            ):
+                issues.append(
+                    {
+                        "code": "missing_attribution_dimensions",
+                        "severity": "warning",
+                        "message": (
+                            "provider billing sample has no session_id, external_record_id, "
+                            "route, or model for reconciliation drill-down"
+                        ),
+                        "field": "session_id",
+                        "record_indexes": [index],
+                    }
+                )
+
+        for external_record_id, indexes in external_ids.items():
+            if len(indexes) <= 1:
+                continue
+            issues.append(
+                {
+                    "code": "duplicate_external_record_id",
+                    "severity": "warning",
+                    "message": "external_record_id appears multiple times in the import batch",
+                    "field": "external_record_id",
+                    "value": external_record_id,
+                    "record_indexes": indexes,
+                }
+            )
+
+        if len(currencies) > 1:
+            issues.append(
+                {
+                    "code": "mixed_billing_currency",
+                    "severity": "warning",
+                    "message": "import batch contains multiple billing currencies",
+                    "field": "billing_currency",
+                    "values": sorted(currencies),
+                    "record_indexes": sorted(
+                        index for indexes in currencies.values() for index in indexes
+                    ),
+                }
+            )
+        if len(periods) > 1:
+            issues.append(
+                {
+                    "code": "mixed_billing_period",
+                    "severity": "warning",
+                    "message": "import batch contains multiple billing periods",
+                    "field": "billing_period",
+                    "values": sorted(periods),
+                    "record_indexes": sorted(
+                        index for indexes in periods.values() for index in indexes
+                    ),
+                }
+            )
+        return issues
 
     def _knowledge_effectiveness_recommendation(
         self,

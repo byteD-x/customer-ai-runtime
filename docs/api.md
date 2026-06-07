@@ -428,9 +428,11 @@
     - `usage_start` / `usage_end`（可选）
 - 返回重点：
   - `imported_count`
+  - `quality_issue_count`
+  - `quality_issues`
   - `records`
 
-说明：该接口用于把已取得的 provider billing 样本导入本地诊断账本，便于面试演示和本地治理验证；它不是 provider 账单自动同步器，也不代表完整租户结算系统。
+说明：该接口用于把已取得的 provider billing 样本导入本地诊断账本，便于面试演示和本地治理验证。导入不会因为样本质量提示而阻断；`quality_issue_count` / `quality_issues` 只用于提示 usage 时间窗倒置、缺少归因维度、重复外部记录 ID、批次内币种或账期混杂等本地样本质量问题。它不是 provider 账单自动同步器，也不代表完整租户结算系统或真实成本节省。
 
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
 

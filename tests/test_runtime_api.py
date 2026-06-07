@@ -1471,6 +1471,8 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
     assert imported.status_code == 200
     import_data = imported.json()["data"]
     assert import_data["imported_count"] == 2
+    assert import_data["quality_issue_count"] == 0
+    assert import_data["quality_issues"] == []
     assert import_data["records"][0]["usage_source"] == "provider_billing"
     assert import_data["records"][0]["provider_billed_cost_cents"] == 12.5
 
@@ -1516,6 +1518,82 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
     assert len(diagnostics_data) == 2
     assert diagnostics_data[0]["code"] == "provider.billing_recorded"
     assert diagnostics_data[0]["context"]["cost_source"] == "provider_billing"
+
+
+def test_provider_billing_import_reports_quality_issues_without_blocking(
+    client: TestClient,
+) -> None:
+    imported = client.post(
+        "/api/v1/admin/costs/provider-billing-records",
+        headers=ADMIN_HEADERS,
+        json={
+            "records": [
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "route": "knowledge",
+                    "total_tokens": 100,
+                    "billed_cost_cents": 2.0,
+                    "billing_currency": "USD",
+                    "billing_period": "2026-06",
+                    "external_record_id": "bill_duplicate",
+                    "usage_start": "2026-06-02T00:00:00Z",
+                    "usage_end": "2026-06-01T00:00:00Z",
+                },
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "openai",
+                    "route": "business",
+                    "total_tokens": 0,
+                    "billed_cost_cents": 1.0,
+                    "billing_currency": "CNY",
+                    "billing_period": "2026-07",
+                    "external_record_id": "bill_duplicate",
+                },
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "openai",
+                    "total_tokens": 50,
+                    "billed_cost_cents": 0.5,
+                    "billing_currency": "USD",
+                    "billing_period": "2026-06",
+                },
+            ]
+        },
+    )
+
+    assert imported.status_code == 200
+    import_data = imported.json()["data"]
+    assert import_data["imported_count"] == 3
+    assert len(import_data["records"]) == 3
+    issue_codes = {issue["code"] for issue in import_data["quality_issues"]}
+    assert import_data["quality_issue_count"] == len(import_data["quality_issues"])
+    assert {
+        "usage_window_invalid",
+        "duplicate_external_record_id",
+        "mixed_billing_currency",
+        "mixed_billing_period",
+        "missing_external_record_id",
+        "zero_tokens_with_billed_cost",
+        "missing_attribution_dimensions",
+    } <= issue_codes
+    duplicate_issue = next(
+        issue
+        for issue in import_data["quality_issues"]
+        if issue["code"] == "duplicate_external_record_id"
+    )
+    assert duplicate_issue["record_indexes"] == [0, 1]
+
+    summary = client.get(
+        "/api/v1/admin/costs/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    summary_data = summary.json()["data"]
+    assert summary_data["provider_billing_records"] == 3
+    assert summary_data["provider_billed_cost_cents"] == 3.5
 
 
 def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> None:

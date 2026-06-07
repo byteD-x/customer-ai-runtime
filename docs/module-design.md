@@ -330,12 +330,12 @@
 
 - Chat 响应字段：`usage`、`cache_hit`、`estimated_cost_cents`、`budget_status`、`usage_source`、`billing_currency`、`billing_period`、`tenant_budget_estimated_cents`
 - 诊断事件：`chat.cost_recorded`，包含 provider、model、route、usage、usage 来源、币种、账期、本地预算阈值和估算成本
-- provider billing 导入事件：`provider.billing_recorded`，包含 provider、model、route、样本 token、`provider_billed_cost_cents`、账期和外部记录 ID
+- provider billing 导入响应：写入 `provider.billing_recorded` 诊断事件，事件包含 provider、model、route、样本 token、`provider_billed_cost_cents`、账期和外部记录 ID；接口同时返回非阻断的 `quality_issue_count` / `quality_issues`，用于本地样本质量诊断
 - 管理端聚合：`GET /api/v1/admin/costs/summary`，按 provider / route 汇总 token、估算成本、导入账单样本金额、诊断样本成本差异、缓存命中、provider usage 记录数、provider billing 样本数、usage 来源、cost 来源、币种和账期；`GET /api/v1/admin/metrics/summary` 输出单实例 `response_cache_summary`
 
 ### 设计取舍
 
-- 本地 provider 默认估算 token，并按本地模型价格表估算成本，用于演示治理链路；预算阈值、币种和账期支持全局策略与租户级覆盖；provider billing 样本导入只用于把外部账单样本纳入摘要观察，不与本地估算成本混算。成本摘要中的 `cost_reconciliation` 和 bucket 级 `cost_variance_cents` 只表示导入样本金额减去本地估算金额的诊断差异；当估算成本为 0 时，`cost_variance_ratio` 返回 `null`。自动拉取 provider 真实账单和完整结算系统仍属于 future target。
+- 本地 provider 默认估算 token，并按本地模型价格表估算成本，用于演示治理链路；预算阈值、币种和账期支持全局策略与租户级覆盖；provider billing 样本导入只用于把外部账单样本纳入摘要观察，不与本地估算成本混算。导入响应中的 `quality_issues` 只提示 usage 时间窗、归因维度、外部记录 ID、币种和账期等本地样本质量问题，不阻断导入。成本摘要中的 `cost_reconciliation` 和 bucket 级 `cost_variance_cents` 只表示导入样本金额减去本地估算金额的诊断差异；当估算成本为 0 时，`cost_variance_ratio` 返回 `null`。自动拉取 provider 真实账单和完整结算系统仍属于 future target。
 - 知识问答缓存命中时 usage 归零，便于观察缓存节省的请求。
 - 业务工具查询不缓存，避免实时订单、物流、售后状态过期。
 
@@ -386,4 +386,4 @@
 - 文档中的多服务拆分、独立控制台等属于 future target，不宣称当前仓库已落地。
 - 当前人工接管队列已通过 `HandoffQueueBackend.enqueue` 接口化并由容器统一注入；默认 `local` 后端基于 `Session` 做单进程锁内认领，`queue_backend=local`、`consistency_scope=single_process` 明确该边界；可选 `sqlite` 后端使用 `<storage_root>/state/handoff_queue.sqlite3` 做共享队列表事务认领，返回 `queue_backend=sqlite`、`consistency_scope=shared_sqlite_queue`。该 SQLite 后端只覆盖队列层，不代表当前 JSON Session 仓储具备完整多实例强一致；Redis sorted set / Postgres 行级锁队列仍属于 future target。
 - 当前 RAG eval 是本地标注样例评测，包含 cohort、人工复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`；online eval 只代表输入样本，不代表全量线上准确率。
-- 当前成本治理包含本地模型价格表估算、provider billing 样本导入与诊断样本成本差异摘要，并显式暴露 usage 来源、cost 来源、可配置币种、可配置账期和可配置本地预算阈值；导入样本不代表自动真实账单同步、完整租户结算或线上节省比例。
+- 当前成本治理包含本地模型价格表估算、provider billing 样本导入、非阻断样本质量诊断与诊断样本成本差异摘要，并显式暴露 usage 来源、cost 来源、可配置币种、可配置账期和可配置本地预算阈值；导入样本不代表自动真实账单同步、完整租户结算或线上节省比例。

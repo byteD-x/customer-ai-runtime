@@ -80,7 +80,7 @@
 - `usage_start`
 - `usage_end`
 
-这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`usage_source=provider` 表示上游 SDK 已返回原生 usage，`usage_source=estimated` 表示运行时本地估算，`usage_source=provider_billing` 表示导入的 provider billing 样本；`estimated_cost_cents` 当前按本地模型价格表与 usage 估算，`provider_billed_cost_cents` 只统计导入账单样本金额。摘要中的 `cost_reconciliation.variance_cents` 以及 provider / route bucket 的 `cost_variance_cents` 统一按“导入账单样本金额 - 本地估算金额”计算，只用于诊断样本对账；当本地估算成本为 0 时，差异比例返回 `null`。`billing_currency`、`billing_period` 和 `tenant_budget_estimated_cents` 默认来自全局策略，也可通过 `tenant_cost_policies` 做租户级覆盖。自动拉取 provider 真实账单与完整账单系统结算仍属于 future target。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
+这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`usage_source=provider` 表示上游 SDK 已返回原生 usage，`usage_source=estimated` 表示运行时本地估算，`usage_source=provider_billing` 表示导入的 provider billing 样本；`estimated_cost_cents` 当前按本地模型价格表与 usage 估算，`provider_billed_cost_cents` 只统计导入账单样本金额。摘要中的 `cost_reconciliation.variance_cents` 以及 provider / route bucket 的 `cost_variance_cents` 统一按“导入账单样本金额 - 本地估算金额”计算，只用于诊断样本对账；当本地估算成本为 0 时，差异比例返回 `null`。`billing_currency`、`billing_period` 和 `tenant_budget_estimated_cents` 默认来自全局策略，也可通过 `tenant_cost_policies` 做租户级覆盖。provider billing 样本导入接口返回的 `quality_issue_count` / `quality_issues` 是接口层的非阻断样本质量诊断，不写入 `provider.billing_recorded` 事件 context，也不影响已导入样本参与本地成本摘要聚合。自动拉取 provider 真实账单与完整账单系统结算仍属于 future target。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
 
 ## 4. 注意事项
 

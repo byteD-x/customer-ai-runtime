@@ -12,7 +12,7 @@
 - 实时业务工具、行业适配、插件注册与启停
 - Auth Bridge：API Key / Session / JWT / Custom Token / 自定义桥接
 - 路由置信度分层、`intent_stack`、页面上下文感知
-- 成本治理：LLM usage、usage 来源、cost 来源、可配置币种、可配置账期、可配置本地预算阈值、租户成本策略、可配置模型价格表、provider billing 样本导入、诊断样本成本差异摘要、知识问答安全缓存、业务查询不缓存、成本摘要
+- 成本治理：LLM usage、usage 来源、cost 来源、可配置币种、可配置账期、可配置本地预算阈值、租户成本策略、可配置模型价格表、provider billing 样本导入、非阻断样本质量诊断、诊断样本成本差异摘要、知识问答安全缓存、业务查询不缓存、成本摘要
 - LLM 接入治理：模型覆盖、结构化 schema、Prompt 版本历史、Prompt revision 只读摘要、安全 diff 与 prompt hash 缓存隔离
 - Prompt 回滚 API：指定 revision 回滚并生成新的激活版本记录，revision 摘要和 diff 接口可暴露账本异常 issues
 - RAG eval：8 个本地标注 case、多知识库样例、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数、失败明细、可复现脚本
@@ -35,7 +35,7 @@
 ### P1：生产化增强
 
 - **多实例人工队列**：当前已完成 `HandoffQueueBackend.enqueue` 入队接口化和可选 SQLite 队列表事务认领；后续继续迁移为 Redis sorted set 原子 pop 或 Postgres 行级锁认领，并补齐共享 Session 存储。
-- **真实成本结算**：当前已完成租户级预算阈值、币种和账期策略配置，以及 provider billing 样本导入、摘要聚合与诊断样本差异展示；后续继续接入自动 provider 账单拉取、真实 provider usage 对账与账单结算系统。
+- **真实成本结算**：当前已完成租户级预算阈值、币种和账期策略配置，以及 provider billing 样本导入、非阻断样本质量诊断、摘要聚合与诊断样本差异展示；后续继续接入自动 provider 账单拉取、真实 provider usage 对账与账单结算系统。
 - **外部系统联调**：在 readiness 脚本基础上，补充真实 OpenAI / Qdrant / 业务 API / 客服工单系统的端到端联调记录。
 - **部署材料完善**：在现有 Docker Compose 基础上，继续细化环境变量模板、启动检查、Qdrant 联调和常见故障排查。
 
