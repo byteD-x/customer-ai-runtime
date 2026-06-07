@@ -35,6 +35,16 @@ def test_selects_api_suite_for_tool_catalog_change() -> None:
     assert selection.targets == ("tests/test_runtime_api.py",)
 
 
+def test_selects_api_and_costs_suites_for_admin_change() -> None:
+    selection = select_targets(["src/customer_ai_runtime/application/admin.py"])
+
+    assert selection.suites == ("api", "costs")
+    assert "tests/test_runtime_api.py" in selection.targets
+    assert "tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary" in (
+        selection.targets
+    )
+
+
 def test_selects_handoff_suite_for_handoff_queue_change() -> None:
     selection = select_targets(["src/customer_ai_runtime/application/handoff_queue.py"])
 

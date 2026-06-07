@@ -32,6 +32,7 @@
 - `chat.knowledge_retrieved`：知识检索完成（包含 `effective_hit`）
 - `knowledge.retrieve_miss`：知识检索未命中有效引用（warning）
 - `chat.cost_recorded`：LLM usage、缓存命中、估算成本与预算状态已记录
+- `provider.billing_recorded`：外部 provider billing 样本已导入，用于成本摘要按独立口径聚合
 - `chat.handoff_required`：需要转人工（warning）
 - `chat.completed`：一次聊天请求完成（包含 `duration_ms`）
 - `voice.turn_completed`：一次语音轮次完成（包含 `duration_ms`）
@@ -61,7 +62,25 @@
 - `billing_period`
 - `tenant_budget_estimated_cents`
 
-这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`usage_source=provider` 表示上游 SDK 已返回原生 usage，`usage_source=estimated` 表示运行时本地估算；`estimated_cost_cents` 当前按本地模型价格表与 usage 估算，`billing_currency`、`billing_period` 和 `tenant_budget_estimated_cents` 默认来自全局策略，也可通过 `tenant_cost_policies` 做租户级覆盖。真实租户账单仍需要 provider 原生账单与账单系统对接。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
+`provider.billing_recorded` 的 `context` 当前包含：
+
+- `tenant_id`
+- `session_id`
+- `provider`
+- `model`
+- `route`
+- `total_tokens`
+- `usage_source=provider_billing`
+- `cost_source=provider_billing`
+- `estimated_cost_cents=0.0`
+- `provider_billed_cost_cents`
+- `billing_currency`
+- `billing_period`
+- `external_record_id`
+- `usage_start`
+- `usage_end`
+
+这些字段用于 `GET /api/v1/admin/costs/summary` 聚合。`usage_source=provider` 表示上游 SDK 已返回原生 usage，`usage_source=estimated` 表示运行时本地估算，`usage_source=provider_billing` 表示导入的 provider billing 样本；`estimated_cost_cents` 当前按本地模型价格表与 usage 估算，`provider_billed_cost_cents` 只统计导入账单样本金额。`billing_currency`、`billing_period` 和 `tenant_budget_estimated_cents` 默认来自全局策略，也可通过 `tenant_cost_policies` 做租户级覆盖。自动拉取 provider 真实账单与完整账单系统结算仍属于 future target。`total_tokens` 等数值字段不会被按敏感 token 误脱敏；真实密钥、Cookie、JWT 等仍按脱敏规则处理。
 
 ## 4. 注意事项
 

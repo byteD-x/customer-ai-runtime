@@ -384,7 +384,7 @@
 
 ### `GET /api/v1/admin/costs/summary`
 
-- 用途：汇总当前诊断样本中的 LLM token、估算成本、缓存命中和预算告警
+- 用途：汇总当前诊断样本中的 LLM token、估算成本、导入 provider billing 样本金额、缓存命中和预算告警
 - 权限：`admin` / `operator`
 - 可选查询参数：
   - `tenant_id`
@@ -392,18 +392,44 @@
   - `sample_size`
   - `total_tokens`
   - `estimated_cost_cents`
+  - `provider_billed_cost_cents`
   - `cache_hits`
   - `cache_hit_rate`
   - `budget_alerts`
   - `provider_usage_records`
+  - `provider_billing_records`
   - `usage_source_counts`
+  - `cost_source_counts`
   - `billing_currency_counts`
   - `billing_period_counts`
   - `tenant_budget_estimated_cents`
   - `by_provider`
   - `by_route`
 
-说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；`billing_currency`、`billing_period` 与 `tenant_budget_estimated_cents` 支持策略配置和租户级覆盖，但真实账单结算还需要 provider 原生账单与账单系统对接。
+说明：该接口仍基于最近诊断事件聚合，`estimated_cost_cents` 是本地模型价格表估算；`provider_billed_cost_cents` 只统计通过 provider billing 导入接口写入的样本金额，不会混入估算成本；`billing_currency`、`billing_period` 与 `tenant_budget_estimated_cents` 支持策略配置和租户级覆盖。自动拉取 provider 真实账单、账单系统结算和线上节省比例仍属于 future target。
+
+### `POST /api/v1/admin/costs/provider-billing-records`
+
+- 用途：导入外部 provider billing 样本，写入 `provider.billing_recorded` 诊断事件，并参与成本摘要聚合
+- 权限：`admin`
+- 请求体：
+  - `records[]`
+    - `tenant_id`
+    - `provider`
+    - `billed_cost_cents`
+    - `billing_currency`
+    - `billing_period`
+    - `model`（可选）
+    - `route`（可选）
+    - `session_id`（可选）
+    - `total_tokens`（可选）
+    - `external_record_id`（可选）
+    - `usage_start` / `usage_end`（可选）
+- 返回重点：
+  - `imported_count`
+  - `records`
+
+说明：该接口用于把已取得的 provider billing 样本导入本地诊断账本，便于面试演示和本地治理验证；它不是 provider 账单自动同步器，也不代表完整租户结算系统。
 
 ### `GET /api/v1/admin/sessions?tenant_id=demo-tenant`
 

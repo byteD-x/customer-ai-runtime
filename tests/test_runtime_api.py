@@ -1405,6 +1405,105 @@ def test_chat_cost_uses_tenant_billing_policy(client: TestClient) -> None:
     assert summary_data["tenant_budget_estimated_cents"] == 0.0
 
 
+def test_provider_billing_import_updates_cost_summary(client: TestClient) -> None:
+    chat = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "hello",
+        },
+    )
+    assert chat.status_code == 200
+
+    denied = client.post(
+        "/api/v1/admin/costs/provider-billing-records",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "records": [
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "openai",
+                    "billed_cost_cents": 12.5,
+                    "billing_currency": "USD",
+                    "billing_period": "monthly",
+                }
+            ]
+        },
+    )
+    assert denied.status_code == 403
+
+    imported = client.post(
+        "/api/v1/admin/costs/provider-billing-records",
+        headers=ADMIN_HEADERS,
+        json={
+            "records": [
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "route": "knowledge",
+                    "session_id": chat.json()["data"]["session_id"],
+                    "total_tokens": 1234,
+                    "billed_cost_cents": 12.5,
+                    "billing_currency": "USD",
+                    "billing_period": "monthly",
+                    "external_record_id": "bill_001",
+                    "usage_start": "2026-06-01T00:00:00Z",
+                    "usage_end": "2026-06-30T23:59:59Z",
+                },
+                {
+                    "tenant_id": "demo-tenant",
+                    "provider": "openai",
+                    "model": "gpt-4.1-mini",
+                    "route": "business",
+                    "total_tokens": 500,
+                    "billed_cost_cents": 3.25,
+                    "billing_currency": "USD",
+                    "billing_period": "monthly",
+                    "external_record_id": "bill_002",
+                },
+            ]
+        },
+    )
+    assert imported.status_code == 200
+    import_data = imported.json()["data"]
+    assert import_data["imported_count"] == 2
+    assert import_data["records"][0]["usage_source"] == "provider_billing"
+    assert import_data["records"][0]["provider_billed_cost_cents"] == 12.5
+
+    summary = client.get(
+        "/api/v1/admin/costs/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    summary_data = summary.json()["data"]
+    assert summary_data["provider_billing_records"] == 2
+    assert summary_data["provider_billed_cost_cents"] == 15.75
+    assert summary_data["estimated_cost_cents"] == chat.json()["data"]["estimated_cost_cents"]
+    assert summary_data["cost_source_counts"]["runtime_estimate"] == 1
+    assert summary_data["cost_source_counts"]["provider_billing"] == 2
+    assert summary_data["usage_source_counts"]["provider_billing"] == 2
+    assert summary_data["billing_period_counts"]["monthly"] == 2
+    assert summary_data["by_provider"]["openai"]["provider_billed_cost_cents"] == 15.75
+    assert summary_data["by_provider"]["openai"]["provider_billing_records"] == 2
+    assert summary_data["by_route"]["knowledge"]["provider_billed_cost_cents"] == 12.5
+    assert summary_data["by_route"]["business"]["provider_billed_cost_cents"] == 3.25
+
+    diagnostics = client.get(
+        "/api/v1/admin/diagnostics",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant", "code_prefix": "provider.billing"},
+    )
+    assert diagnostics.status_code == 200
+    diagnostics_data = diagnostics.json()["data"]
+    assert len(diagnostics_data) == 2
+    assert diagnostics_data[0]["code"] == "provider.billing_recorded"
+    assert diagnostics_data[0]["context"]["cost_source"] == "provider_billing"
+
+
 def test_handoff_queue_orders_and_claims_by_skill_group(client: TestClient) -> None:
     normal = client.post(
         "/api/v1/chat/messages",

@@ -7,7 +7,7 @@
 **可讲亮点**
 
 - 知识类问答支持安全缓存，重复命中时 `cache_hit=true`，本轮 usage 归零；业务查询不缓存，避免订单、售后等实时状态过期。
-- 每轮文本请求记录 provider、model、route、token、usage 来源、币种、账期、模型价格估算成本、缓存命中和本地预算阈值，管理端可按 provider / route 汇总。
+- 每轮文本请求记录 provider、model、route、token、usage 来源、币种、账期、模型价格估算成本、缓存命中和本地预算阈值；管理端可导入 provider billing 样本，并按 provider / route 分别汇总本地估算成本与账单样本金额。
 - 默认 `local` provider 可本地跑通；OpenAI usage 可在 provider 层透传 SDK 返回的 usage。
 
 **代码证据**
@@ -17,6 +17,7 @@
 - `src/customer_ai_runtime/domain/models.py`
 - `tests/test_runtime_api.py::test_chat_cost_summary_and_knowledge_cache`
 - `tests/test_runtime_api.py::test_chat_cost_uses_configured_model_price_map`
+- `tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary`
 
 **验证命令**
 
@@ -30,7 +31,7 @@
 - 答：知识问答依赖版本化知识库和引用片段，缓存 key 绑定 tenant、query、knowledge_base_id、active version、prompt hash 和 citation key；业务查询涉及订单、物流、售后等实时数据，缓存会带来错误状态，因此强制不缓存。
 
 - 问：成本估算是不是线上真实成本？
-- 答：当前支持本地模型价格表估算，并在响应、诊断事件和成本摘要中显式区分 `usage_source`、`billing_currency`、`billing_period` 和本地预算阈值；真实 OpenAI 接入时优先使用 SDK usage 字段，再结合租户、币种和结算周期做账单核算。仓库不虚构线上成本指标。
+- 答：当前支持本地模型价格表估算，也支持把已取得的 provider billing 样本导入为 `provider.billing_recorded` 诊断事件；成本摘要会分开展示 `estimated_cost_cents` 与 `provider_billed_cost_cents`。自动拉取 provider 账单、完整租户结算和线上节省比例仍是 future target，仓库不虚构线上成本指标。
 
 ## 2. RAG 质量评测：如何证明 RAG 不只是“能回答”？
 
@@ -226,8 +227,8 @@ k6 run deploy\k6-smoke.js
 
 - **S**：FAQ 高频重复但业务查询必须实时，简单统一缓存会造成错误。
 - **T**：在不引入付费依赖的前提下实现成本可观测和安全缓存。
-- **A**：增加 usage/cost、usage 来源、币种、账期、本地预算阈值字段、模型价格表估算、知识问答安全缓存、业务查询不缓存、管理端成本摘要。
-- **R**：本地测试可验证缓存命中、业务不缓存、价格表估算和成本聚合；真实节省比例待线上账单数据确认。
+- **A**：增加 usage/cost、usage 来源、cost 来源、币种、账期、本地预算阈值字段、模型价格表估算、provider billing 样本导入、知识问答安全缓存、业务查询不缓存、管理端成本摘要。
+- **R**：本地测试可验证缓存命中、业务不缓存、价格表估算、provider billing 样本导入和成本聚合；真实节省比例待线上账单数据确认。
 
 ### STAR：RAG 质量评测
 
@@ -254,6 +255,6 @@ k6 run deploy\k6-smoke.js
 
 - 当前本地 JSON 存储适合开发、演示和单实例部署；多实例强一致不是当前事实。
 - 当前 RAG eval 是本地标注样例，online eval 只代表导入的脱敏样本，不代表全量线上准确率。
-- 当前成本支持本地模型价格表估算，并显式暴露 usage 来源、币种、账期和本地预算阈值；真实账单仍需要接模型供应商 usage、币种、租户预算和结算周期。
+- 当前成本支持本地模型价格表估算和 provider billing 样本导入，并显式暴露 usage 来源、cost 来源、币种、账期和本地预算阈值；自动 provider 账单拉取、完整租户结算和线上节省比例仍是 future target。
 - 当前 `queue_backend=local`、`consistency_scope=single_process` 只代表单进程锁内认领边界；`queue_backend=sqlite`、`consistency_scope=shared_sqlite_queue` 只代表共享 SQLite 队列表事务认领，不代表完整多实例 Session 存储强一致。
 - Redis queue、Postgres repository、共享 Session 存储、真实客服工单系统、Qdrant/OpenAI 端到端联调和生产压测均可作为下一阶段扩展，不写成已完成能力。

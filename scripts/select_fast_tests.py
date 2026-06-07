@@ -15,6 +15,12 @@ STREAM_TARGETS = (
 SUITE_TARGETS = {
     "stream": STREAM_TARGETS,
     "api": ("tests/test_runtime_api.py",),
+    "costs": (
+        "tests/test_runtime_api.py::test_chat_cost_summary_and_knowledge_cache",
+        "tests/test_runtime_api.py::test_chat_cost_uses_configured_model_price_map",
+        "tests/test_runtime_api.py::test_chat_cost_uses_tenant_billing_policy",
+        "tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary",
+    ),
     "handoff": (
         "tests/test_runtime_api.py::test_handoff_flow",
         "tests/test_runtime_api.py::test_message_feedback_can_request_human_handoff",
@@ -48,6 +54,7 @@ SUITE_ORDER = (
     "selector",
     "stream",
     "api",
+    "costs",
     "handoff",
     "rag",
     "agent",
@@ -203,8 +210,7 @@ def _suites_for_source_path(path: str) -> tuple[str, ...]:
     if path == "src/customer_ai_runtime/application/container.py":
         return ("api", "handoff", "providers")
     if path.startswith("src/customer_ai_runtime/application/"):
-        suite = _suite_for_application_path(path)
-        return () if suite is None else (suite,)
+        return _suites_for_application_path(path)
     if path.startswith("src/customer_ai_runtime/api/"):
         return ("api",)
     if path.startswith("src/customer_ai_runtime/core/"):
@@ -214,7 +220,7 @@ def _suites_for_source_path(path: str) -> tuple[str, ...]:
     return ()
 
 
-def _suite_for_application_path(path: str) -> str | None:
+def _suites_for_application_path(path: str) -> tuple[str, ...]:
     if any(
         name in path
         for name in (
@@ -223,7 +229,7 @@ def _suite_for_application_path(path: str) -> str | None:
             "knowledge.py",
         )
     ):
-        return "rag"
+        return ("rag",)
     if any(
         name in path
         for name in (
@@ -233,7 +239,7 @@ def _suite_for_application_path(path: str) -> str | None:
             "rate_limit.py",
         )
     ):
-        return "smoke"
+        return ("smoke",)
     if any(
         name in path
         for name in (
@@ -245,7 +251,9 @@ def _suite_for_application_path(path: str) -> str | None:
             "costs.py",
         )
     ):
-        return "api"
+        if any(name in path for name in ("chat.py", "admin.py", "costs.py")):
+            return ("api", "costs")
+        return ("api",)
     if any(
         name in path
         for name in (
@@ -253,8 +261,8 @@ def _suite_for_application_path(path: str) -> str | None:
             "handoff_queue.py",
         )
     ):
-        return "handoff"
-    return None
+        return ("handoff",)
+    return ()
 
 
 def _selection(

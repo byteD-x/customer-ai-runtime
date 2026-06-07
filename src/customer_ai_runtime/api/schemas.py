@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -162,6 +163,24 @@ class TenantCostPolicyUpdateRequest(BaseModel):
     alert_estimated_cents: float | None = Field(default=None, ge=0.0, le=1_000_000.0)
     billing_currency: str | None = Field(default=None, min_length=3, max_length=12)
     billing_period: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class ProviderBillingRecordRequest(TenantScopedRequest):
+    provider: str = Field(min_length=1, max_length=64)
+    billed_cost_cents: float = Field(ge=0.0, le=1_000_000_000.0)
+    billing_currency: str = Field(min_length=3, max_length=12)
+    billing_period: str = Field(min_length=1, max_length=64)
+    model: str | None = Field(default=None, min_length=1, max_length=128)
+    route: str | None = Field(default=None, min_length=1, max_length=64)
+    session_id: str | None = Field(default=None, min_length=1, max_length=64)
+    total_tokens: int | None = Field(default=None, ge=0, le=10_000_000_000)
+    external_record_id: str | None = Field(default=None, min_length=1, max_length=128)
+    usage_start: datetime | None = None
+    usage_end: datetime | None = None
+
+
+class ProviderBillingImportRequest(BaseModel):
+    records: list[ProviderBillingRecordRequest] = Field(min_length=1, max_length=100)
 
 
 class PolicyUpdateRequest(BaseModel):

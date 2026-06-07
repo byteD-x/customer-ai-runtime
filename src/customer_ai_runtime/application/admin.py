@@ -18,7 +18,7 @@ from customer_ai_runtime.application.session import SessionService
 from customer_ai_runtime.application.tool_catalog import ToolCatalogService
 from customer_ai_runtime.application.voice_rtc import RTCService
 from customer_ai_runtime.core.config import Settings
-from customer_ai_runtime.domain.models import Session
+from customer_ai_runtime.domain.models import DiagnosticLevel, Session
 
 
 def _percentile_ms(values: list[int], quantile: float) -> float | None:
@@ -93,20 +93,65 @@ class AdminService:
     def get_metrics(self) -> dict[str, Any]:
         return self.metrics.snapshot()
 
+    def record_provider_billing(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        imported_records: list[dict[str, Any]] = []
+        for record in records:
+            billed_cost_cents = float(record["billed_cost_cents"])
+            total_tokens = int(record.get("total_tokens") or 0)
+            route = str(record.get("route") or "provider_billing")
+            context = {
+                "tenant_id": str(record["tenant_id"]),
+                "session_id": record.get("session_id"),
+                "provider": str(record["provider"]),
+                "model": record.get("model"),
+                "route": route,
+                "total_tokens": total_tokens,
+                "cache_hit": False,
+                "usage_source": "provider_billing",
+                "cost_source": "provider_billing",
+                "estimated_cost_cents": 0.0,
+                "provider_billed_cost_cents": billed_cost_cents,
+                "billing_currency": str(record["billing_currency"]),
+                "billing_period": str(record["billing_period"]),
+                "external_record_id": record.get("external_record_id"),
+                "usage_start": record.get("usage_start"),
+                "usage_end": record.get("usage_end"),
+            }
+            self.diagnostics_service.record(
+                DiagnosticLevel.INFO,
+                "provider.billing_recorded",
+                "provider billing record imported",
+                context,
+            )
+            imported_records.append(context)
+        return {
+            "imported_count": len(imported_records),
+            "records": imported_records,
+        }
+
     def get_cost_summary(self, tenant_id: str | None = None) -> dict[str, Any]:
-        events = self.diagnostics_service.query(
+        chat_events = self.diagnostics_service.query(
             tenant_id=tenant_id,
             code_prefix="chat.cost_recorded",
             limit=500,
         )
+        billing_events = self.diagnostics_service.query(
+            tenant_id=tenant_id,
+            code_prefix="provider.billing_recorded",
+            limit=500,
+        )
+        events = [*chat_events, *billing_events]
         provider_summary: dict[str, dict[str, Any]] = {}
         route_summary: dict[str, dict[str, Any]] = {}
         total_tokens = 0
         total_cost = 0.0
+        provider_billed_cost = 0.0
         cache_hits = 0
         alert_count = 0
         provider_usage_records = 0
+        provider_billing_records = 0
         usage_source_counts: Counter[str] = Counter()
+        cost_source_counts: Counter[str] = Counter()
         billing_currency_counts: Counter[str] = Counter()
         billing_period_counts: Counter[str] = Counter()
         tenant_budget_estimated_cents: float | None = None
@@ -116,22 +161,35 @@ class AdminService:
             route = str(context.get("route") or "unknown")
             tokens = int(context.get("total_tokens") or 0)
             cost = float(context.get("estimated_cost_cents") or 0.0)
+            billed_cost = float(context.get("provider_billed_cost_cents") or 0.0)
             cache_hit = bool(context.get("cache_hit"))
             usage_source = str(
                 context.get("usage_source")
                 or ("estimated" if bool(context.get("usage_estimated", True)) else "provider")
             )
+            cost_source = str(
+                context.get("cost_source")
+                or (
+                    "provider_billing"
+                    if event.code.startswith("provider.billing")
+                    else "runtime_estimate"
+                )
+            )
             billing_currency = str(context.get("billing_currency") or "USD")
             billing_period = str(context.get("billing_period") or "per_request")
             total_tokens += tokens
             total_cost += cost
+            provider_billed_cost += billed_cost
             if cache_hit:
                 cache_hits += 1
             if context.get("budget_status") == "alert":
                 alert_count += 1
             if usage_source == "provider":
                 provider_usage_records += 1
+            if event.code.startswith("provider.billing"):
+                provider_billing_records += 1
             usage_source_counts[usage_source] += 1
+            cost_source_counts[cost_source] += 1
             billing_currency_counts[billing_currency] += 1
             billing_period_counts[billing_period] += 1
             budget_value = context.get("tenant_budget_estimated_cents")
@@ -145,6 +203,7 @@ class AdminService:
                 provider,
                 tokens,
                 cost,
+                billed_cost,
                 cache_hit,
                 usage_source,
             )
@@ -153,6 +212,7 @@ class AdminService:
                 route,
                 tokens,
                 cost,
+                billed_cost,
                 cache_hit,
                 usage_source,
             )
@@ -162,11 +222,14 @@ class AdminService:
             "sample_size": request_count,
             "total_tokens": total_tokens,
             "estimated_cost_cents": round(total_cost, 6),
+            "provider_billed_cost_cents": round(provider_billed_cost, 6),
             "cache_hits": cache_hits,
             "cache_hit_rate": 0.0 if request_count == 0 else round(cache_hits / request_count, 4),
             "budget_alerts": alert_count,
             "provider_usage_records": provider_usage_records,
+            "provider_billing_records": provider_billing_records,
             "usage_source_counts": dict(usage_source_counts),
+            "cost_source_counts": dict(cost_source_counts),
             "billing_currency_counts": dict(billing_currency_counts),
             "billing_period_counts": dict(billing_period_counts),
             "tenant_budget_estimated_cents": tenant_budget_estimated_cents,
@@ -848,6 +911,7 @@ class AdminService:
         key: str,
         tokens: int,
         cost: float,
+        billed_cost: float,
         cache_hit: bool,
         usage_source: str,
     ) -> None:
@@ -857,18 +921,26 @@ class AdminService:
                 "request_count": 0,
                 "total_tokens": 0,
                 "estimated_cost_cents": 0.0,
+                "provider_billed_cost_cents": 0.0,
                 "cache_hits": 0,
                 "provider_usage_records": 0,
                 "estimated_usage_records": 0,
+                "provider_billing_records": 0,
             },
         )
         bucket["request_count"] += 1
         bucket["total_tokens"] += tokens
         bucket["estimated_cost_cents"] = round(bucket["estimated_cost_cents"] + cost, 6)
+        bucket["provider_billed_cost_cents"] = round(
+            bucket["provider_billed_cost_cents"] + billed_cost,
+            6,
+        )
         if cache_hit:
             bucket["cache_hits"] += 1
         if usage_source == "provider":
             bucket["provider_usage_records"] += 1
+        elif usage_source == "provider_billing":
+            bucket["provider_billing_records"] += 1
         else:
             bucket["estimated_usage_records"] += 1
 

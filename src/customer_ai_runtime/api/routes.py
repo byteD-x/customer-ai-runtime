@@ -34,6 +34,7 @@ from customer_ai_runtime.api.schemas import (
     PolicyUpdateRequest,
     PromptRollbackRequest,
     PromptUpdateRequest,
+    ProviderBillingImportRequest,
     RTCRoomCreateRequest,
     RTCRoomJoinRequest,
     RuntimeConfigUpdateRequest,
@@ -695,6 +696,21 @@ async def admin_cost_summary(
     if tenant_id is not None:
         container.access_control.validate_tenant_access(auth_context, tenant_id)
     return success_response(container.admin_service.get_cost_summary(tenant_id=tenant_id))
+
+
+@router.post("/api/v1/admin/costs/provider-billing-records")
+async def admin_import_provider_billing_records(
+    payload: ProviderBillingImportRequest,
+    request: Request,
+    auth_context: ResolvedAuthContext = AUTH_CONTEXT_DEPENDENCY,
+) -> JSONResponse:
+    container = get_container(request)
+    require_admin(auth_context)
+    for record in payload.records:
+        container.access_control.validate_tenant_access(auth_context, record.tenant_id)
+    return success_response(
+        container.admin_service.record_provider_billing(payload.model_dump(mode="json")["records"])
+    )
 
 
 @router.get("/api/v1/admin/sessions")

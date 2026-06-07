@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("auto", "stream", "api", "handoff", "rag", "agent", "providers", "smoke", "external", "selector", "full")]
+    [ValidateSet("auto", "stream", "api", "costs", "handoff", "rag", "agent", "providers", "smoke", "external", "selector", "full")]
     [string] $Suite = "stream",
 
     [string[]] $Target = @(),
@@ -44,6 +44,14 @@ function Resolve-PytestArgs {
             }
             "api" {
                 $pytestArgs += "tests/test_runtime_api.py"
+            }
+            "costs" {
+                $pytestArgs += @(
+                    "tests/test_runtime_api.py::test_chat_cost_summary_and_knowledge_cache",
+                    "tests/test_runtime_api.py::test_chat_cost_uses_configured_model_price_map",
+                    "tests/test_runtime_api.py::test_chat_cost_uses_tenant_billing_policy",
+                    "tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary"
+                )
             }
             "handoff" {
                 $pytestArgs += @(
