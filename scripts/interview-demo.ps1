@@ -1,5 +1,6 @@
 param(
     [switch] $Json,
+    [switch] $Markdown,
     [string] $StorageRoot
 )
 
@@ -23,6 +24,9 @@ try {
     $args = @("examples\interview_demo.py")
     if ($Json) {
         $args += "--json"
+    }
+    elseif ($Markdown) {
+        $args += "--markdown"
     }
     if ($StorageRoot) {
         $args += @("--storage-root", $StorageRoot)

@@ -85,6 +85,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
             "business": business["route"],
             "risk": risk["route"],
         },
+        "model_route": knowledge_first.get("model_route"),
         "citations": knowledge_first["citations"],
         "finance_knowledge": finance_knowledge,
         "saas_knowledge": saas_knowledge,
@@ -103,12 +104,20 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the local interview demo flow.")
     parser.add_argument("--storage-root", type=Path, default=None)
-    parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    output_group.add_argument(
+        "--markdown",
+        action="store_true",
+        help="Print a human-readable Markdown report.",
+    )
     args = parser.parse_args()
 
     result = run_demo(storage_root=args.storage_root)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif args.markdown:
+        print(render_markdown_report(result))
     else:
         for key in (
             "route",
@@ -129,8 +138,226 @@ def main() -> int:
     return 0 if result["rag_eval_summary"]["failed"] == 0 else 1
 
 
+def render_markdown_report(result: dict[str, Any]) -> str:
+    route = dict(result.get("route") or {})
+    cost_summary = dict(result.get("cost_summary") or {})
+    rag_eval_summary = dict(result.get("rag_eval_summary") or {})
+    rag_quality_gate = dict(result.get("rag_quality_gate") or {})
+    finance_knowledge = dict(result.get("finance_knowledge") or {})
+    saas_knowledge = dict(result.get("saas_knowledge") or {})
+    tool_result = dict(result.get("tool_result") or {})
+    handoff_package = dict(result.get("handoff_package") or {})
+    agent_workflow = dict(result.get("agent_workflow") or {})
+
+    lines: list[str] = [
+        "# Customer AI Runtime 面试演示报告",
+        "",
+        "## 一句话结论",
+        _markdown_table(
+            [
+                ("知识缓存", _yes_no(route.get("knowledge_cache_hit"))),
+                (
+                    "RAG 评测",
+                    f"{rag_eval_summary.get('passed', 0)} / {rag_eval_summary.get('case_count', 0)} 通过",
+                ),
+                (
+                    "RAG 质量门禁",
+                    "通过" if rag_quality_gate.get("passed") else "未通过",
+                ),
+                (
+                    "Agent 工具流",
+                    str(agent_workflow.get("state") or "-"),
+                ),
+                (
+                    "成本样本",
+                    (
+                        f"{cost_summary.get('sample_size', 0)} 条 / "
+                        f"{_format_number(cost_summary.get('total_tokens'))} tokens / "
+                        f"{_format_number(cost_summary.get('estimated_cost_cents'))}（美分）"
+                    ),
+                ),
+            ]
+        ),
+        "",
+        "## 关键链路",
+        _markdown_table(
+            [
+                ("知识问答", _format_route_pair(route.get("knowledge_first"))),
+                ("业务查询", _format_route_pair(route.get("business"))),
+                ("风险接管", _format_route_pair(route.get("risk"))),
+                ("模型路由", _format_model_route(result)),
+                (
+                    "RAG 指标",
+                    (
+                        f"offline_accuracy={_format_number(rag_eval_summary.get('offline_accuracy'))}, "
+                        f"context_precision={_format_number(rag_eval_summary.get('context_precision'))}, "
+                        f"context_recall={_format_number(rag_eval_summary.get('context_recall'))}"
+                    ),
+                ),
+                (
+                    "质量门禁",
+                    f"failed_case_count={len(rag_quality_gate.get('failed_case_ids') or [])}",
+                ),
+            ]
+        ),
+        "",
+        "## 业务证据",
+        _bullet_line(
+            "财务运营知识问答引用",
+            _citation_summary(finance_knowledge),
+        ),
+        _bullet_line(
+            "SaaS 管理知识问答引用",
+            _citation_summary(saas_knowledge),
+        ),
+        _bullet_line(
+            "业务工具结果",
+            str(tool_result.get("summary") or "-"),
+        ),
+        _bullet_line(
+            "人工接管摘要",
+            str(handoff_package.get("issue_summary") or "-"),
+        ),
+        _bullet_line(
+            "Agent 最终结果",
+            str(agent_workflow.get("final_answer") or "-"),
+        ),
+        "",
+        "## 成本与评测",
+        _markdown_table(
+            [
+                (
+                    "成本聚合",
+                    (
+                        f"sample_size={cost_summary.get('sample_size', 0)}, "
+                        f"cache_hits={cost_summary.get('cache_hits', 0)}, "
+                        f"estimated_cost_cents={_format_number(cost_summary.get('estimated_cost_cents'))}"
+                    ),
+                ),
+                (
+                    "按路由",
+                    _summarize_cost_buckets(cost_summary.get("by_route") or {}),
+                ),
+                (
+                    "按模型",
+                    _summarize_cost_buckets(cost_summary.get("by_model") or {}),
+                ),
+            ]
+        ),
+        _bullet_line(
+            "RAG 质量门禁通过",
+            "是" if rag_quality_gate.get("passed") else "否",
+        ),
+        _bullet_line(
+            "失败 case",
+            _format_failed_cases(rag_quality_gate.get("failed_case_ids") or []),
+        ),
+        _bullet_line(
+            "修复建议",
+            _format_suggested_actions(rag_quality_gate.get("suggested_actions") or []),
+        ),
+    ]
+
+    badcase_breakdown = rag_quality_gate.get("badcase_breakdown") or {}
+    if badcase_breakdown:
+        lines.extend(
+            [
+                "",
+                "## Badcase Breakdown",
+                "```json",
+                json.dumps(badcase_breakdown, ensure_ascii=False, indent=2),
+                "```",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "## 面试可讲点",
+            "- 知识问答、业务查询、风险转人工、Agent 工具流和成本治理已经串成一个可本地复现的闭环。",
+            "- `rag_quality_gate` 可直接回答失败后如何定位路由、切片、召回和拒答阈值。",
+            "- 该报告不宣称线上准确率、真实成本节省或外部 provider 联调通过，只代表当前本地样例。",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _load_eval_payload() -> dict[str, Any]:
     return json.loads(EVAL_CASES_PATH.read_text(encoding="utf-8"))
+
+
+def _markdown_table(rows: list[tuple[str, str]]) -> str:
+    lines = ["| 指标 | 值 |", "| --- | --- |"]
+    for label, value in rows:
+        lines.append(f"| {label} | {value} |")
+    return "\n".join(lines)
+
+
+def _bullet_line(label: str, value: str) -> str:
+    return f"- {label}：{value}"
+
+
+def _format_number(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    text = f"{number:.4f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _yes_no(value: Any) -> str:
+    return "是" if bool(value) else "否"
+
+
+def _format_route_pair(route_name: Any) -> str:
+    label = str(route_name or "-")
+    return f"`{label}`"
+
+
+def _format_model_route(result: dict[str, Any]) -> str:
+    model_route = dict(result.get("model_route") or {})
+    strategy = str(model_route.get("strategy") or "-")
+    selected_model = str(model_route.get("selected_model") or "-")
+    provider = str(model_route.get("provider") or "-")
+    return f"{strategy} / {selected_model} / {provider}"
+
+
+def _citation_summary(knowledge_payload: dict[str, Any]) -> str:
+    citations = knowledge_payload.get("citations") or []
+    if not isinstance(citations, list) or not citations:
+        return "-"
+    citation = citations[0]
+    if not isinstance(citation, dict):
+        return "-"
+    title = str(citation.get("title") or "-")
+    excerpt = str(citation.get("excerpt") or "-")
+    return f"`{title}` - {excerpt}"
+
+
+def _summarize_cost_buckets(buckets: dict[str, Any]) -> str:
+    if not buckets:
+        return "-"
+    parts: list[str] = []
+    for name, payload in sorted(buckets.items()):
+        if not isinstance(payload, dict):
+            continue
+        request_count = payload.get("request_count", 0)
+        estimated_cost_cents = _format_number(payload.get("estimated_cost_cents"))
+        parts.append(f"`{name}` {request_count} 次 / {estimated_cost_cents}（美分）")
+    return "；".join(parts) if parts else "-"
+
+
+def _format_failed_cases(case_ids: list[str]) -> str:
+    if not case_ids:
+        return "无"
+    return ", ".join(f"`{case_id}`" for case_id in case_ids)
+
+
+def _format_suggested_actions(actions: list[str]) -> str:
+    if not actions:
+        return "无"
+    return "；".join(actions)
 
 
 def _seed_knowledge_bases(client: TestClient, payload: dict[str, Any]) -> None:

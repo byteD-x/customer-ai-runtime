@@ -484,6 +484,11 @@
 10. 问：距离生产还差什么？  
    答：真实业务系统联调、线上标注集、生产监控告警、共享 Session 存储、多实例队列和真实账单自动拉取。
 
+### 8.8 一页式 Markdown 报告
+
+- `powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1 -Markdown` 可直接导出一页式 Markdown 演示报告。
+- 报告会汇总 route、model_route、cost_summary、rag_eval_summary、rag_quality_gate 和业务证据，适合发给面试官、贴进作品集或放进 README 片段。
+
 ## 9. 最终结论
 
 ### 9.1 最值得优先做的 3 件事

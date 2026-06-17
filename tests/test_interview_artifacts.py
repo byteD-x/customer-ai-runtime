@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from customer_ai_runtime.evaluation import evaluate_rag_results
-from examples.interview_demo import run_demo
+from examples.interview_demo import render_markdown_report, run_demo
 from scripts.check_external_readiness import run_checks
 
 
@@ -367,6 +367,14 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert quality_gate["badcase_breakdown"] == {}
     assert quality_gate["failed_case_ids"] == []
     assert quality_gate["suggested_actions"] == []
+
+    markdown_report = render_markdown_report(result)
+    assert "# Customer AI Runtime 面试演示报告" in markdown_report
+    assert "| RAG 质量门禁 | 通过 |" in markdown_report
+    assert "offline_accuracy=1" in markdown_report
+    assert "finance operations policy" in markdown_report
+    assert "saas administration policy" in markdown_report
+    assert "## 面试可讲点" in markdown_report
 
 
 def test_external_readiness_skips_missing_optional_credentials() -> None:
