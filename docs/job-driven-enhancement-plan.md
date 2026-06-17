@@ -286,7 +286,7 @@
 
 ### P0-2 固化本地演示闭环
 
-- 优化目标：让面试现场能快速展示 route、citations、finance_knowledge、tool_result、handoff、cost_summary、rag_eval_summary。
+- 优化目标：让面试现场能快速展示 route、citations、finance_knowledge、saas_knowledge、tool_result、handoff、cost_summary、rag_eval_summary。
 - 对应岗位要求：可演示、可验证、能解释业务闭环。
 - 对应岗位方向：AI应用/RAG、Agent、后端工程。
 - 修改范围：优先使用 `examples/interview_demo.py`、`scripts/eval_rag.py`、README 演示段落。
@@ -294,7 +294,7 @@
 - 为什么值得做：比新增功能更直接提高可信度。
 - 为什么不过度设计：复用已有脚本，不引入新服务。
 - 验证方式：`.venv\Scripts\python.exe examples\interview_demo.py --json`。
-- 简历表达价值：可写“通过本地演示脚本串联知识问答、财务运营知识问答、业务工具、转人工、成本摘要与 RAG eval”。
+- 简历表达价值：可写“通过本地演示脚本串联知识问答、财务运营知识问答、SaaS 管理问答、业务工具、转人工、成本摘要与 RAG eval”。
 - 面试讲述价值：能现场解释每个字段的业务含义。
 - 预计耗时：0.5 天。
 - 风险和限制：只代表本地样例，不代表线上准确率。

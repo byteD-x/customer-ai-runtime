@@ -47,6 +47,11 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
                 "What is required for finance expense reimbursement approval?",
                 knowledge_base_id="kb_finance_ops",
             )
+            saas_knowledge = _chat(
+                client,
+                "How long do SCIM provisioning changes take to sync?",
+                knowledge_base_id="kb_saas",
+            )
             business = _chat(
                 client,
                 "订单 ORD-1001 发货了吗？",
@@ -74,11 +79,13 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
             "knowledge_cached": knowledge_cached["route"],
             "knowledge_cache_hit": knowledge_cached["cache_hit"],
             "finance_knowledge": finance_knowledge["route"],
+            "saas_knowledge": saas_knowledge["route"],
             "business": business["route"],
             "risk": risk["route"],
         },
         "citations": knowledge_first["citations"],
         "finance_knowledge": finance_knowledge,
+        "saas_knowledge": saas_knowledge,
         "tool_result": business["tool_result"],
         "handoff_package": risk["handoff"],
         "handoff_queue": handoff_queue,
@@ -103,6 +110,7 @@ def main() -> int:
             "route",
             "citations",
             "finance_knowledge",
+            "saas_knowledge",
             "tool_result",
             "handoff_package",
             "handoff_queue",

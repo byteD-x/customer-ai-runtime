@@ -104,13 +104,14 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 1. 知识问答：输出 `route=knowledge` 和 `citations`。
 2. 重复知识问答：输出 `knowledge_cache_hit=true`。
 3. 财务运营知识问答：输出 `finance_knowledge`，展示 `finance operations policy` 引用和报销审批证据。
-4. 业务查询：输出 `route=business` 和 `tool_result`，证明实时工具链路不走缓存。
-5. 风险问题：输出 `handoff_package`，进入 `handoff_queue`，再 `claim-next`。
-6. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期和按 route 聚合。
-7. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`。
-8. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
-9. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
-10. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
+4. SaaS 管理知识问答：输出 `saas_knowledge`，展示 `saas administration policy` 引用和 SCIM 同步 SLA。
+5. 业务查询：输出 `route=business` 和 `tool_result`，证明实时工具链路不走缓存。
+6. 风险问题：输出 `handoff_package`，进入 `handoff_queue`，再 `claim-next`。
+7. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期和按 route 聚合。
+8. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`。
+9. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
+10. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
+11. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
 
 **验证命令**
 
