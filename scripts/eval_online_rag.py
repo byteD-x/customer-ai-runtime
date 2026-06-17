@@ -45,26 +45,47 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate anonymized online RAG labeled samples.")
     parser.add_argument("path", type=Path, help="JSON or JSONL online sample export.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    parser.add_argument("--output", type=Path, default=None, help="Write the report to a UTF-8 file.")
     args = parser.parse_args()
 
     report = run_online_eval(args.path)
-    if args.json:
-        print(json.dumps({"online_rag_eval_summary": report}, ensure_ascii=False, indent=2))
+    output_text = _render_output(report, json_output=args.json)
+    if args.output is not None:
+        write_output_file(args.output, output_text)
+        print(f"wrote_report: {args.output}")
     else:
-        print("online_rag_eval_summary")
-        print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
-        if report["failures"]:
-            print("online_rag_eval_failures")
-            print(json.dumps(report["failures"], ensure_ascii=False, indent=2))
+        print(output_text, end="")
     return 0 if report["summary"]["failed"] == 0 else 1
 
 
+def write_output_file(output_path: Path, output_text: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(output_text, encoding="utf-8")
+
+
+def _render_output(report: dict[str, Any], *, json_output: bool) -> str:
+    if json_output:
+        return json.dumps({"online_rag_eval_summary": report}, ensure_ascii=False, indent=2) + "\n"
+    lines = [
+        "online_rag_eval_summary",
+        json.dumps(report["summary"], ensure_ascii=False, indent=2),
+    ]
+    if report["failures"]:
+        lines.extend(
+            [
+                "online_rag_eval_failures",
+                json.dumps(report["failures"], ensure_ascii=False, indent=2),
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _read_json_or_jsonl(path: Path) -> Any:
-    text = path.read_text(encoding="utf-8").strip()
+    text = path.read_text(encoding="utf-8-sig").strip()
     if not text:
         return []
     if path.suffix.lower() == ".jsonl":
-        return [json.loads(line) for line in text.splitlines() if line.strip()]
+        return [json.loads(line.lstrip("\ufeff")) for line in text.splitlines() if line.strip()]
     return json.loads(text)
 
 

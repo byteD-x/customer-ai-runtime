@@ -6,6 +6,8 @@ from pathlib import Path
 from customer_ai_runtime.evaluation import evaluate_rag_results
 from examples.interview_demo import render_markdown_report, run_demo, write_output_file
 from scripts.check_external_readiness import run_checks
+from scripts.eval_rag import _render_output as render_rag_eval_output
+from scripts.eval_rag import write_output_file as write_rag_eval_output_file
 
 
 def test_rag_eval_reports_citation_keyword_failures() -> None:
@@ -309,6 +311,24 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
     )
     assert noisy_feedback_report["summary"]["context_precision"] == 0.5
     assert noisy_feedback_report["summary"]["context_recall"] == 1.0
+
+
+def test_rag_eval_report_can_be_written_to_file(tmp_path: Path) -> None:
+    report = {
+        "summary": {
+            "failed": 0,
+            "case_count": 1,
+            "offline_accuracy": 1.0,
+        },
+        "failures": [],
+    }
+    output_text = render_rag_eval_output(report, json_output=True)
+    output_path = tmp_path / "reports" / "rag-eval.json"
+
+    write_rag_eval_output_file(output_path, output_text)
+
+    exported = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exported["rag_eval_summary"]["summary"]["offline_accuracy"] == 1.0
 
 
 def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:

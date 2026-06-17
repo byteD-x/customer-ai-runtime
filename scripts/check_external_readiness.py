@@ -6,6 +6,7 @@ import os
 import socket
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -145,29 +146,44 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check optional external integration readiness.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument("--output", type=Path, default=None, help="Write the report to a UTF-8 file.")
     args = parser.parse_args()
 
     report = run_checks(timeout_seconds=args.timeout)
-    if args.json:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+    output_text = _render_output(report, json_output=args.json)
+    if args.output is not None:
+        write_output_file(args.output, output_text)
+        print(f"wrote_report: {args.output}")
     else:
-        print("external_readiness")
-        audit = report["audit"]
-        print(f"scope: {audit['scope']}")
-        print(f"evidence_level: {audit['evidence_level']}")
-        print(f"timeout_seconds: {audit['timeout_seconds']}")
-        for check in report["checks"]:
-            print(f"- {check['name']}: {check['status']} ({check['message']})")
-            check_audit = check["audit"]
-            print(
-                "  "
-                f"category={check_audit['category']}; "
-                f"probe_type={check_audit['probe_type']}; "
-                f"required_env={','.join(check_audit['required_env']) or '-'}"
-            )
-        print(f"overall_status: {report['overall_status']}")
-        print(f"disclaimer: {audit['disclaimer']}")
+        print(output_text, end="")
     return 1 if report["overall_status"] == "failed" else 0
+
+
+def write_output_file(output_path: Path, output_text: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(output_text, encoding="utf-8")
+
+
+def _render_output(report: dict[str, Any], *, json_output: bool) -> str:
+    if json_output:
+        return json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    lines = ["external_readiness"]
+    audit = report["audit"]
+    lines.append(f"scope: {audit['scope']}")
+    lines.append(f"evidence_level: {audit['evidence_level']}")
+    lines.append(f"timeout_seconds: {audit['timeout_seconds']}")
+    for check in report["checks"]:
+        lines.append(f"- {check['name']}: {check['status']} ({check['message']})")
+        check_audit = check["audit"]
+        lines.append(
+            "  "
+            f"category={check_audit['category']}; "
+            f"probe_type={check_audit['probe_type']}; "
+            f"required_env={','.join(check_audit['required_env']) or '-'}"
+        )
+    lines.append(f"overall_status: {report['overall_status']}")
+    lines.append(f"disclaimer: {audit['disclaimer']}")
+    return "\n".join(lines) + "\n"
 
 
 def _check_openai_models(

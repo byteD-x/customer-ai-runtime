@@ -3,8 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.check_external_readiness import run_checks
+from scripts.check_external_readiness import (
+    _render_output as render_readiness_output,
+)
+from scripts.check_external_readiness import (
+    run_checks,
+    write_output_file as write_readiness_output_file,
+)
+from scripts.eval_online_rag import _render_output as render_online_eval_output
 from scripts.eval_online_rag import run_online_eval
+from scripts.eval_online_rag import write_output_file as write_online_eval_output_file
 
 
 def test_external_readiness_passes_with_mocked_dependencies() -> None:
@@ -145,6 +153,18 @@ def test_external_readiness_skips_qdrant_config_when_provider_is_local() -> None
     assert qdrant_config_check["audit"]["evidence"] == "provider_not_enabled"
 
 
+def test_external_readiness_report_can_be_written_to_file(tmp_path: Path) -> None:
+    report = run_checks(env={}, timeout_seconds=0.1)
+    output_text = render_readiness_output(report, json_output=True)
+    output_path = tmp_path / "reports" / "external-readiness.json"
+
+    write_readiness_output_file(output_path, output_text)
+
+    exported = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exported["overall_status"] == "skipped"
+    assert exported["audit"]["scope"] == "optional_external_integration_readiness"
+
+
 def test_online_rag_eval_reads_jsonl_labeled_samples(tmp_path: Path) -> None:
     sample_path = tmp_path / "online-rag.jsonl"
     sample_path.write_text(
@@ -243,6 +263,50 @@ def test_online_rag_eval_reads_json_cases_and_results(tmp_path: Path) -> None:
     assert report["cases"][0]["dataset_id"] == "prod_2026w22"
 
 
+def test_online_rag_eval_report_can_be_written_to_file(tmp_path: Path) -> None:
+    sample_path = tmp_path / "online-rag.json"
+    sample_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "case_id": "case_1",
+                        "dataset_id": "prod_2026w22",
+                        "cohort": "approved",
+                        "review_status": "approved",
+                        "question": "What is refund proof?",
+                        "expected_route": "knowledge",
+                        "expected_citation_keywords": ["payment proof"],
+                        "min_score": 0.1,
+                    }
+                ],
+                "results": [
+                    {
+                        "case_id": "case_1",
+                        "route": "knowledge",
+                        "citations": [
+                            {
+                                "title": "refund",
+                                "excerpt": "Keep payment proof for refund requests.",
+                                "score": 0.5,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = run_online_eval(sample_path)
+    output_text = render_online_eval_output(report, json_output=True)
+    output_path = tmp_path / "reports" / "online-rag-eval.json"
+
+    write_online_eval_output_file(output_path, output_text)
+
+    exported = json.loads(output_path.read_text(encoding="utf-8"))
+    assert exported["online_rag_eval_summary"]["summary"]["online_accuracy"] == 1.0
+
+
 def test_online_rag_eval_does_not_treat_empty_citations_as_refusal(tmp_path: Path) -> None:
     sample_path = tmp_path / "online-rag.jsonl"
     sample_path.write_text(
@@ -265,3 +329,36 @@ def test_online_rag_eval_does_not_treat_empty_citations_as_refusal(tmp_path: Pat
     assert report["summary"]["online_accuracy"] == 0.0
     assert report["summary"]["refusal_accuracy"] == 0.0
     assert report["failures"][0]["actual_refusal"] is False
+
+
+def test_online_rag_eval_reads_utf8_bom_jsonl(tmp_path: Path) -> None:
+    sample_path = tmp_path / "online-rag-bom.jsonl"
+    payload = json.dumps(
+        {
+            "sample_id": "sample_1",
+            "dataset_id": "prod_2026w22",
+            "cohort": "gray_5p",
+            "review_status": "reviewed",
+            "question": "How long does SCIM sync take?",
+            "expected_route": "knowledge",
+            "expected_citation_keywords": ["15 minutes"],
+            "min_score": 0.2,
+            "route": "knowledge",
+            "citations": [
+                {
+                    "title": "identity sync",
+                    "excerpt": "SCIM provisioning syncs within 15 minutes.",
+                    "score": 0.6,
+                }
+            ],
+        }
+    )
+    sample_path.write_text(
+        "\ufeff" + payload,
+        encoding="utf-8-sig",
+    )
+
+    report = run_online_eval(sample_path)
+
+    assert report["summary"]["case_count"] == 1
+    assert report["summary"]["online_accuracy"] == 1.0

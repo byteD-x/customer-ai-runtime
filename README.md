@@ -243,13 +243,13 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite auto
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 
 # RAG 质量评测：route、引用关键词、上下文 precision/recall、有效命中率、失败明细与 badcase 分类（JSON 输出）
-.venv\Scripts\python.exe scripts\eval_rag.py --json
+.venv\Scripts\python.exe scripts\eval_rag.py --json --output .codex\rag-eval-report.json
 
 # 外部联调 readiness：输出审计元数据；未配置或未启用对应 provider 时返回 skipped，不宣称真实联调通过
-.venv\Scripts\python.exe scripts\check_external_readiness.py --json
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json
 
 # 可选：真实线上脱敏标注样本评估，需要传入 JSON/JSONL 导出文件
-.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
 
 # 面试演示：知识问答、财务运营知识问答、SaaS 管理知识问答、缓存命中、业务工具、结构化交接包、转人工队列、受控 Agent 工具流、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py

@@ -57,9 +57,9 @@
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
-.venv\Scripts\python.exe scripts\eval_rag.py --json
-.venv\Scripts\python.exe scripts\check_external_readiness.py --json
-.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
+.venv\Scripts\python.exe scripts\eval_rag.py --json --output .codex\rag-eval-report.json
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
 .venv\Scripts\python.exe examples\interview_demo.py
 # 可选：需要本机安装 k6 且服务已启动
 k6 run deploy\k6-smoke.js

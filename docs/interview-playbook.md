@@ -56,7 +56,7 @@
 **验证命令**
 
 ```powershell
-.venv\Scripts\python.exe scripts\eval_rag.py --json
+.venv\Scripts\python.exe scripts\eval_rag.py --json --output .codex\rag-eval-report.json
 .venv\Scripts\python.exe -m pytest tests\test_interview_artifacts.py
 ```
 
@@ -121,8 +121,8 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 
 ```powershell
 .venv\Scripts\python.exe examples\interview_demo.py
-.venv\Scripts\python.exe scripts\check_external_readiness.py --json
-.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json
+.venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json
+.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
 # 可选：需要本机安装 k6 且服务已启动
 k6 run deploy\k6-smoke.js
 ```
@@ -200,7 +200,7 @@ k6 run deploy\k6-smoke.js
 - `expect_effective_hit=false` 用于验证低分未命中。
 - 失败明细暴露 `missing_keywords`、`missing_context_keywords`、`route_ok`、`effective_hit_ok`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_ok` 和 `faithfulness_score`。
 
-**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`examples/interview_demo.py` 输出 `rag_quality_gate`，把失败 case、badcase breakdown 和修复建议收成面试可读摘要；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数、`offline_accuracy`、质量门禁和 badcase 分类建议。
+**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`，也可通过 `--output .codex\rag-eval-report.json` 留存报告；`examples/interview_demo.py` 输出 `rag_quality_gate`，把失败 case、badcase breakdown 和修复建议收成面试可读摘要；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数、`offline_accuracy`、质量门禁和 badcase 分类建议。
 
 ### 难点 3：转人工要能被运营侧消费
 
@@ -226,7 +226,7 @@ k6 run deploy\k6-smoke.js
 - 输出稳定字段，便于面试时按字段讲架构。
 - 外部 readiness 脚本独立检查 OpenAI models、OpenAI Admin usage/costs、Qdrant runtime config/health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖；缺少配置或未启用对应 provider 时返回 `skipped`，配置不一致或探针失败时返回 `failed`，并通过 `audit` 字段说明检查范围、依赖环境变量、探针类型和证据口径，不误报联调通过。
 
-**可验证结果**：`.venv\Scripts\python.exe examples\interview_demo.py` 退出码为 0，输出关键段落；`.venv\Scripts\python.exe scripts\check_external_readiness.py --json` 在未配置外部凭据或未启用对应 provider 时输出 `skipped` 和 `audit` 元数据。
+**可验证结果**：`.venv\Scripts\python.exe examples\interview_demo.py` 退出码为 0，输出关键段落；`.venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json` 在未配置外部凭据或未启用对应 provider 时输出 `skipped` 和 `audit` 元数据，并可留存审计报告。
 
 ## 8. STAR 表达模板
 
