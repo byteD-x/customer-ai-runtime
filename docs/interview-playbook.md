@@ -116,7 +116,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 12. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
 13. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
 14. Markdown 报告：`powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1 -Markdown -OutputPath .codex\interview-demo-report.md` 可以直接生成一页式 Markdown 报告文件，适合贴给面试官或放进作品集。
-15. 面试材料包：`powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1` 可以一次生成 demo、RAG eval 和 readiness 报告；如有脱敏线上样本，再加 `-OnlineRagSamplePath path\to\online-rag.jsonl` 生成 online eval 报告。
+15. 面试材料包：`powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1` 可以一次生成 demo、RAG eval 和 readiness 报告；如有脱敏线上样本，再加 `-OnlineRagSamplePath examples\online_rag_sample.jsonl` 生成 online eval 报告。
 
 **验证命令**
 
@@ -124,7 +124,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1
 .venv\Scripts\python.exe examples\interview_demo.py
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json
-.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
+.venv\Scripts\python.exe scripts\eval_online_rag.py examples\online_rag_sample.jsonl --json --output .codex\online-rag-eval-report.json
 # 可选：需要本机安装 k6 且服务已启动
 k6 run deploy\k6-smoke.js
 ```

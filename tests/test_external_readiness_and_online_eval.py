@@ -263,6 +263,18 @@ def test_online_rag_eval_reads_json_cases_and_results(tmp_path: Path) -> None:
     assert report["cases"][0]["dataset_id"] == "prod_2026w22"
 
 
+def test_online_rag_eval_example_sample_is_runnable() -> None:
+    sample_path = Path("examples/online_rag_sample.jsonl")
+
+    report = run_online_eval(sample_path)
+
+    assert report["summary"]["case_count"] == 2
+    assert report["summary"]["failed"] == 0
+    assert report["summary"]["accuracy_source"] == "online_labeled_sample"
+    assert report["summary"]["online_accuracy"] == 1.0
+    assert report["summary"]["cohort_breakdown"]["demo_gray_sample"]["case_count"] == 2
+
+
 def test_online_rag_eval_report_can_be_written_to_file(tmp_path: Path) -> None:
     sample_path = tmp_path / "online-rag.json"
     sample_path.write_text(

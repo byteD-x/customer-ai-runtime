@@ -248,12 +248,12 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 # 外部联调 readiness：输出审计元数据；未配置或未启用对应 provider 时返回 skipped，不宣称真实联调通过
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json
 
-# 可选：真实线上脱敏标注样本评估，需要传入 JSON/JSONL 导出文件
-.venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
+# 可选：online eval 格式演示；examples\online_rag_sample.jsonl 是脱敏示例，不代表线上真实准确率
+.venv\Scripts\python.exe scripts\eval_online_rag.py examples\online_rag_sample.jsonl --json --output .codex\online-rag-eval-report.json
 
 # 一键生成面试材料包：默认导出 demo / RAG eval / readiness 报告；提供脱敏样本时额外导出 online eval
 powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1
-powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1 -OnlineRagSamplePath .codex\online-rag-sample.jsonl
+powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1 -OnlineRagSamplePath examples\online_rag_sample.jsonl
 
 # 面试演示：知识问答、财务运营知识问答、SaaS 管理知识问答、缓存命中、业务工具、结构化交接包、转人工队列、受控 Agent 工具流、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py
