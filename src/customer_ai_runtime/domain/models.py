@@ -377,6 +377,8 @@ class PolicyConfig(BaseModel):
     billing_currency: str = "USD"
     billing_period: str = "per_request"
     tenant_cost_policies: dict[str, TenantCostPolicy] = Field(default_factory=dict)
+    default_model: str | None = None
+    route_model_map: dict[str, str] = Field(default_factory=dict)
     risk_keywords: list[str] = Field(
         default_factory=lambda: ["投诉", "仲裁", "监管", "律师", "报警", "安全事故"]
     )

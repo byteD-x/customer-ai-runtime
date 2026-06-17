@@ -7,7 +7,7 @@
 **可讲亮点**
 
 - 知识类问答支持安全缓存，重复命中时 `cache_hit=true`，本轮 usage 归零；业务查询不缓存，避免订单、售后等实时状态过期。
-- 每轮文本请求记录 provider、model、route、token、usage 来源、币种、账期、模型价格估算成本、缓存命中和本地预算阈值；管理端可导入 provider billing 样本，并按 provider / route 分别汇总本地估算成本、账单样本金额和诊断样本差异，同时输出运行时 usage 与导入 provider billing usage 的 token 对账摘要；导入响应会返回非阻断样本质量诊断。
+- 每轮文本请求记录 provider、model、route、token、usage 来源、币种、账期、模型价格估算成本、缓存命中和本地预算阈值；可通过 `default_model` / `route_model_map` 做轻量模型路由，按 route / tenant / default 选择 `selected_model`，但不自动切换 provider；管理端可导入 provider billing 样本，并按 provider / route / model 分别汇总本地估算成本、账单样本金额和诊断样本差异，同时输出运行时 usage 与导入 provider billing usage 的 token 对账摘要；导入响应会返回非阻断样本质量诊断。
 - 默认 `local` provider 可本地跑通；OpenAI usage 可在 provider 层透传 SDK 返回的 usage。
 
 **代码证据**
@@ -16,6 +16,7 @@
 - `src/customer_ai_runtime/application/admin.py`
 - `src/customer_ai_runtime/domain/models.py`
 - `tests/test_runtime_api.py::test_chat_cost_summary_and_knowledge_cache`
+- `tests/test_runtime_api.py::test_chat_model_route_uses_policy_route_model_map`
 - `tests/test_runtime_api.py::test_chat_cost_uses_configured_model_price_map`
 - `tests/test_runtime_api.py::test_provider_billing_import_updates_cost_summary`
 - `tests/test_runtime_api.py::test_provider_billing_usage_reconciliation_matches_runtime_usage`
@@ -32,7 +33,7 @@
 - 答：知识问答依赖版本化知识库和引用片段，缓存 key 绑定 tenant、query、knowledge_base_id、active version、prompt hash 和 citation key；业务查询涉及订单、物流、售后等实时数据，缓存会带来错误状态，因此强制不缓存。
 
 - 问：成本估算是不是线上真实成本？
-- 答：当前支持本地模型价格表估算，也支持把已取得的 provider billing 样本导入为 `provider.billing_recorded` 诊断事件；成本摘要会分开展示 `estimated_cost_cents`、`provider_billed_cost_cents` 和 `cost_reconciliation`，其中 `variance_cents` 只表示导入样本金额减去本地估算金额。摘要还会通过 `usage_reconciliation` 按 `tenant_id + session_id + provider + model` 对运行时 usage 与导入 provider billing usage 做 token 对账诊断，区分强匹配、未匹配和弱归因样本。导入响应中的 `quality_issue_count` / `quality_issues` 只是非阻断的本地样本质量诊断，用来提示样本归因、时间窗、币种或账期等问题。自动拉取 provider 账单、完整租户结算和线上节省比例仍是 future target，仓库不虚构线上成本指标。
+- 答：当前支持本地模型价格表估算，也支持把已取得的 provider billing 样本导入为 `provider.billing_recorded` 诊断事件；成本摘要会分开展示 `estimated_cost_cents`、`provider_billed_cost_cents` 和 `cost_reconciliation`，其中 `variance_cents` 只表示导入样本金额减去本地估算金额。摘要还会按 `by_provider`、`by_route`、`by_model` 聚合请求数、token、估算成本和账单样本金额，并通过 `usage_reconciliation` 按 `tenant_id + session_id + provider + model` 对运行时 usage 与导入 provider billing usage 做 token 对账诊断，区分强匹配、未匹配和弱归因样本。导入响应中的 `quality_issue_count` / `quality_issues` 只是非阻断的本地样本质量诊断，用来提示样本归因、时间窗、币种或账期等问题。自动拉取 provider 账单、完整租户结算和线上节省比例仍是 future target，仓库不虚构线上成本指标。
 
 ## 2. RAG 质量评测：如何证明 RAG 不只是“能回答”？
 
@@ -108,7 +109,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 5. 业务查询：输出 `route=business` 和 `tool_result`，证明实时工具链路不走缓存。
 6. 风险问题：输出 `handoff_package`，进入 `handoff_queue`，再 `claim-next`。
 7. 受控 Agent 工具流：输出 `agent_workflow`，展示 `plan`、`allowed_tools` 约束下的顺序 trace 和最终状态。
-8. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期和按 route 聚合。
+8. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期，以及按 route / model 聚合。
 9. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`。
 10. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
 11. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
@@ -184,7 +185,7 @@ k6 run deploy\k6-smoke.js
 - 宿主身份上下文存在时不缓存，避免用户级敏感答案串用。
 - 业务查询走实时工具链路，明确 `cache_hit=false`。
 
-**可验证结果**：`test_chat_cost_summary_and_knowledge_cache` 覆盖首次知识问答、重复知识问答、业务查询、usage 来源、币种、账期、本地预算阈值和成本摘要聚合；`test_chat_cost_uses_configured_model_price_map` 覆盖本地模型价格表。
+**可验证结果**：`test_chat_cost_summary_and_knowledge_cache` 覆盖首次知识问答、重复知识问答、业务查询、usage 来源、币种、账期、本地预算阈值和成本摘要聚合；`test_chat_model_route_uses_policy_route_model_map` 覆盖 `route_model_map`、`default_model` 与 `by_model` 聚合；`test_chat_cost_uses_configured_model_price_map` 覆盖本地模型价格表。
 
 ### 难点 2：RAG 评测不能把“有引用”当“答对”
 
@@ -231,8 +232,8 @@ k6 run deploy\k6-smoke.js
 
 - **S**：FAQ 高频重复但业务查询必须实时，简单统一缓存会造成错误。
 - **T**：在不引入付费依赖的前提下实现成本可观测和安全缓存。
-- **A**：增加 usage/cost、usage 来源、cost 来源、币种、账期、本地预算阈值字段、模型价格表估算、provider billing 样本导入、非阻断样本质量诊断、诊断样本成本差异摘要、usage token 对账摘要、知识问答安全缓存、业务查询不缓存、管理端成本摘要。
-- **R**：本地测试可验证缓存命中、业务不缓存、价格表估算、provider billing 样本导入、质量问题提示、成本聚合、样本金额对账差异和 usage token 对账差异；真实节省比例待线上账单数据确认。
+- **A**：增加 usage/cost、usage 来源、cost 来源、币种、账期、本地预算阈值字段、模型价格表估算、轻量模型路由、provider billing 样本导入、非阻断样本质量诊断、诊断样本成本差异摘要、usage token 对账摘要、知识问答安全缓存、业务查询不缓存、管理端成本摘要。
+- **R**：本地测试可验证缓存命中、业务不缓存、价格表估算、route/default 模型选择、provider billing 样本导入、质量问题提示、按 provider / route / model 聚合、样本金额对账差异和 usage token 对账差异；真实节省比例待线上账单数据确认。
 
 ### STAR：RAG 质量评测
 
@@ -259,6 +260,6 @@ k6 run deploy\k6-smoke.js
 
 - 当前本地 JSON 存储适合开发、演示和单实例部署；多实例强一致不是当前事实。
 - 当前 RAG eval 是本地标注样例，online eval 只代表导入的脱敏样本，不代表全量线上准确率。
-- 当前成本支持本地模型价格表估算、provider billing 样本导入、非阻断样本质量诊断、诊断样本成本差异摘要和 `usage_reconciliation` token 对账摘要，并显式暴露 usage 来源、cost 来源、币种、账期和本地预算阈值；自动 provider 账单拉取、完整租户结算和线上节省比例仍是 future target。
+- 当前成本支持本地模型价格表估算、`default_model` / `route_model_map` 轻量模型路由、provider billing 样本导入、非阻断样本质量诊断、按 provider / route / model 成本聚合、诊断样本成本差异摘要和 `usage_reconciliation` token 对账摘要，并显式暴露 usage 来源、cost 来源、币种、账期和本地预算阈值；模型路由只影响 `selected_model`，不代表 provider 自动切换；自动 provider 账单拉取、完整租户结算和线上节省比例仍是 future target。
 - 当前 `queue_backend=local`、`consistency_scope=single_process` 只代表单进程锁内认领边界；`queue_backend=sqlite`、`consistency_scope=shared_sqlite_queue` 只代表共享 SQLite 队列表事务认领，不代表完整多实例 Session 存储强一致。
 - Redis queue、Postgres repository、共享 Session 存储、真实客服工单系统、Qdrant/OpenAI 端到端联调和生产压测均可作为下一阶段扩展，不写成已完成能力。

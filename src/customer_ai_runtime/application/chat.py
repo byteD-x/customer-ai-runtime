@@ -220,13 +220,11 @@ class ChatService:
             prompt_template = prompts.knowledge_answer
         elif route_decision.route == RouteType.BUSINESS:
             prompt_template = prompts.business_answer
-        selected_model = self._select_model(route_decision.route, message)
-        model_route = {
-            "strategy": "static_route",
-            "route": route_decision.route.value,
-            "selected_model": selected_model,
-            "provider": self.runtime_config_provider_name(),
-        }
+        selected_model, model_route = self._select_model(
+            route_decision.route,
+            message,
+            tenant_id=tenant_id,
+        )
 
         cache_key = self._build_response_cache_key(
             tenant_id=tenant_id,
@@ -580,8 +578,33 @@ class ChatService:
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
-    def _select_model(self, route: RouteType, message: str) -> str | None:
-        return self.llm_model_name
+    def _select_model(
+        self,
+        route: RouteType,
+        message: str,
+        *,
+        tenant_id: str,
+    ) -> tuple[str | None, dict[str, Any]]:
+        policies = self.runtime_config.get_policies()
+        selected_model = (
+            policies.route_model_map.get(route.value)
+            or policies.route_model_map.get(tenant_id)
+            or policies.default_model
+            or self.llm_model_name
+        )
+        strategy = "static_route"
+        if policies.route_model_map.get(route.value):
+            strategy = "route_map"
+        elif policies.route_model_map.get(tenant_id):
+            strategy = "tenant_map"
+        elif policies.default_model:
+            strategy = "default_model"
+        return selected_model, {
+            "strategy": strategy,
+            "route": route.value,
+            "selected_model": selected_model,
+            "provider": self.runtime_config_provider_name(),
+        }
 
     def _latency_payload(
         self,

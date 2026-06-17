@@ -196,6 +196,8 @@ class PolicyUpdateRequest(BaseModel):
     billing_currency: str | None = Field(default=None, min_length=3, max_length=12)
     billing_period: str | None = Field(default=None, min_length=1, max_length=64)
     tenant_cost_policies: dict[str, TenantCostPolicyUpdateRequest] | None = None
+    default_model: str | None = Field(default=None, min_length=1, max_length=128)
+    route_model_map: dict[str, str] | None = None
     risk_keywords: list[str] | None = None
     human_request_keywords: list[str] | None = None
     intent_return_keywords: list[str] | None = None

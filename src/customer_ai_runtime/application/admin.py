@@ -53,6 +53,11 @@ def _cost_reconciliation(
     }
 
 
+def _model_label(value: Any) -> str:
+    label = str(value or "").strip()
+    return label or "unknown"
+
+
 def _usage_reconciliation(
     chat_events: list[Any],
     billing_events: list[Any],
@@ -252,6 +257,7 @@ class AdminService:
         events = [*chat_events, *billing_events]
         provider_summary: dict[str, dict[str, Any]] = {}
         route_summary: dict[str, dict[str, Any]] = {}
+        model_summary: dict[str, dict[str, Any]] = {}
         total_tokens = 0
         total_cost = 0.0
         provider_billed_cost = 0.0
@@ -268,6 +274,7 @@ class AdminService:
             context = event.context
             provider = str(context.get("provider") or "unknown")
             route = str(context.get("route") or "unknown")
+            model = _model_label(context.get("model") or context.get("selected_model"))
             tokens = int(context.get("total_tokens") or 0)
             cost = float(context.get("estimated_cost_cents") or 0.0)
             billed_cost = float(context.get("provider_billed_cost_cents") or 0.0)
@@ -325,6 +332,15 @@ class AdminService:
                 cache_hit,
                 usage_source,
             )
+            self._accumulate_cost(
+                model_summary,
+                model,
+                tokens,
+                cost,
+                billed_cost,
+                cache_hit,
+                usage_source,
+            )
         request_count = len(events)
         reconciliation = _cost_reconciliation(
             total_cost,
@@ -352,6 +368,7 @@ class AdminService:
             "tenant_budget_estimated_cents": tenant_budget_estimated_cents,
             "by_provider": provider_summary,
             "by_route": route_summary,
+            "by_model": model_summary,
         }
 
     def get_metrics_summary(self, tenant_id: str | None = None) -> dict[str, Any]:

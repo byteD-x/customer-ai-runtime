@@ -1281,7 +1281,9 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert "local" in cost_data["by_provider"]
     assert "knowledge" in cost_data["by_route"]
     assert "business" in cost_data["by_route"]
+    assert "local" in cost_data["by_model"]
     assert cost_data["by_provider"]["local"]["estimated_usage_records"] >= 3
+    assert cost_data["by_model"]["local"]["estimated_usage_records"] >= 3
 
     metrics_summary = client.get(
         "/api/v1/admin/metrics/summary",
@@ -1315,6 +1317,88 @@ def test_chat_cost_summary_and_knowledge_cache(client: TestClient) -> None:
     assert disabled_cache_summary["enabled"] is False
     assert disabled_cache_summary["size"] == 0
     assert disabled_cache_summary["clears"] >= 1
+
+
+def test_chat_model_route_uses_policy_route_model_map(client: TestClient) -> None:
+    seed_knowledge_base(client)
+    policy_update = client.put(
+        "/api/v1/admin/policies",
+        headers=ADMIN_HEADERS,
+        json={
+            "default_model": "local-default",
+            "route_model_map": {
+                "knowledge": "local-rag",
+                "business": "local-tool",
+            },
+        },
+    )
+    assert policy_update.status_code == 200
+    policy_data = policy_update.json()["data"]
+    assert policy_data["default_model"] == "local-default"
+    assert policy_data["route_model_map"]["knowledge"] == "local-rag"
+
+    knowledge = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "退款规则是什么？",
+            "knowledge_base_id": "kb_support",
+        },
+    )
+    assert knowledge.status_code == 200
+    knowledge_data = knowledge.json()["data"]
+    assert knowledge_data["route"] == "knowledge"
+    assert knowledge_data["selected_model"] == "local-rag"
+    assert knowledge_data["model_route"] == {
+        "strategy": "route_map",
+        "route": "knowledge",
+        "selected_model": "local-rag",
+        "provider": "local",
+    }
+
+    business = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "订单 ORD-1001 发货了吗？",
+            "integration_context": {"industry": "ecommerce"},
+        },
+    )
+    assert business.status_code == 200
+    business_data = business.json()["data"]
+    assert business_data["route"] == "business"
+    assert business_data["selected_model"] == "local-tool"
+    assert business_data["model_route"]["strategy"] == "route_map"
+
+    fallback = client.post(
+        "/api/v1/chat/messages",
+        headers=CUSTOMER_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "message": "hello",
+        },
+    )
+    assert fallback.status_code == 200
+    fallback_data = fallback.json()["data"]
+    assert fallback_data["route"] == "fallback"
+    assert fallback_data["selected_model"] == "local-default"
+    assert fallback_data["model_route"]["strategy"] == "default_model"
+
+    summary = client.get(
+        "/api/v1/admin/costs/summary",
+        headers=ADMIN_HEADERS,
+        params={"tenant_id": "demo-tenant"},
+    )
+    assert summary.status_code == 200
+    by_model = summary.json()["data"]["by_model"]
+    assert by_model["local-rag"]["request_count"] >= 1
+    assert by_model["local-tool"]["request_count"] >= 1
+    assert by_model["local-default"]["request_count"] >= 1
 
 
 def test_chat_cost_uses_configured_model_price_map(
@@ -1526,6 +1610,8 @@ def test_provider_billing_import_updates_cost_summary(client: TestClient) -> Non
     assert summary_data["by_route"]["business"]["provider_billed_cost_cents"] == 3.25
     assert summary_data["by_route"]["business"]["cost_variance_cents"] == 3.25
     assert summary_data["by_route"]["business"]["cost_variance_ratio"] is None
+    assert summary_data["by_model"]["gpt-4.1-mini"]["provider_billed_cost_cents"] == 15.75
+    assert summary_data["by_model"]["gpt-4.1-mini"]["provider_billing_records"] == 2
 
     diagnostics = client.get(
         "/api/v1/admin/diagnostics",
