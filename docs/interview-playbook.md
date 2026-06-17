@@ -43,7 +43,7 @@
 - eval payload 带 `dataset_id`、`cohort`、`review_status` 和 `label`，汇总输出 `reviewed_case_count`、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score` 与 `cohort_breakdown`。
 - Chat 知识回复会输出引用来源字段，并在无有效引用时返回 `refusal=true` 和 `hallucination_check`，避免无证据强答。
 - `low_score_miss` 用例用于证明“低分不算有效命中”，避免把兜底引用包装成准确命中。
-- 失败明细包含 missing keywords、missing context keywords、route mismatch、effective hit mismatch，可直接指导补文档、调切片或调阈值。
+- 失败明细包含 missing keywords、missing context keywords、route mismatch、effective hit mismatch，并输出 `badcase_categories`、`suggested_actions` 与汇总级 `badcase_breakdown`，可直接指导补文档、调切片、调路由或调拒答阈值。
 
 **代码证据**
 
@@ -194,7 +194,7 @@ k6 run deploy\k6-smoke.js
 - `expect_effective_hit=false` 用于验证低分未命中。
 - 失败明细暴露 `missing_keywords`、`missing_context_keywords`、`route_ok`、`effective_hit_ok`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_ok` 和 `faithfulness_score`。
 
-**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数和 `offline_accuracy`。
+**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数、`offline_accuracy` 和 badcase 分类建议。
 
 ### 难点 3：转人工要能被运营侧消费
 

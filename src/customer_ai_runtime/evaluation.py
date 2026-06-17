@@ -1,6 +1,24 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
+
+BADCASE_SUGGESTIONS = {
+    "request_error": "先检查评测请求是否成功返回，再排查 API、鉴权、入参或服务启动问题。",
+    "route_mismatch": "优先检查路由策略、意图关键词、页面上下文和业务对象信号是否足够明确。",
+    "effective_hit_mismatch": (
+        "检查 min_score、top_k、切片质量和召回候选，避免把低分兜底片段当成有效命中。"
+    ),
+    "citation_keyword_missing": (
+        "补充或改写知识片段，或调整切片与 rerank，让期望证据关键词能进入引用。"
+    ),
+    "context_keyword_missing": (
+        "检查返回引用是否覆盖标注上下文，必要时调整召回、重排或知识库内容。"
+    ),
+    "refusal_mismatch": (
+        "检查拒答阈值、有效引用判断和 hallucination check，确保无证据时拒答、有证据时不误拒。"
+    ),
+}
 
 
 def evaluate_rag_results(
@@ -21,6 +39,7 @@ def evaluate_rag_results(
     refusal_checked_count = 0
     refusal_passed_count = 0
     faithfulness_scores: list[float] = []
+    badcase_counter: Counter[str] = Counter()
 
     for case in cases:
         case_id = str(case.get("case_id") or "")
@@ -64,6 +83,20 @@ def evaluate_rag_results(
         passed = route_ok and keywords_ok and effective_hit_ok
         if refusal_ok is not None:
             passed = passed and refusal_ok
+        badcase_categories = _badcase_categories(
+            result=result,
+            route_ok=route_ok,
+            keywords_ok=keywords_ok,
+            effective_hit_ok=effective_hit_ok,
+            missing_context_keywords=missing_context_keywords,
+            expected_context_keywords=expected_context_keywords,
+            refusal_ok=refusal_ok,
+        )
+        suggested_actions = [
+            BADCASE_SUGGESTIONS[category]
+            for category in badcase_categories
+            if category in BADCASE_SUGGESTIONS
+        ]
         if effective_hit:
             effective_hits += 1
         if citation_accuracy is not None:
@@ -133,12 +166,15 @@ def evaluate_rag_results(
             "actual_refusal": actual_refusal,
             "refusal_ok": refusal_ok,
             "faithfulness_score": faithfulness_score,
+            "badcase_categories": badcase_categories,
+            "suggested_actions": suggested_actions,
             "labeled": labeled,
             "passed": passed,
         }
         evaluated_cases.append(item)
         if not passed:
             failures.append(item)
+            badcase_counter.update(badcase_categories)
 
     case_count = len(evaluated_cases)
     passed_count = sum(1 for item in evaluated_cases if item["passed"])
@@ -163,6 +199,7 @@ def evaluate_rag_results(
             if labeled_count == 0
             else round(labeled_passed_count / labeled_count, 4),
             "cohort_breakdown": _cohort_breakdown(cohort_stats),
+            "badcase_breakdown": _badcase_breakdown(badcase_counter),
         },
         "cases": evaluated_cases,
         "failures": failures,
@@ -294,6 +331,43 @@ def _faithfulness_score(
     if expected_count == 0:
         return 1.0
     return 0.0
+
+
+def _badcase_categories(
+    *,
+    result: dict[str, Any],
+    route_ok: bool,
+    keywords_ok: bool,
+    effective_hit_ok: bool,
+    missing_context_keywords: list[str],
+    expected_context_keywords: list[str],
+    refusal_ok: bool | None,
+) -> list[str]:
+    categories: list[str] = []
+    status_code = result.get("status_code")
+    if status_code is not None and status_code != 200:
+        categories.append("request_error")
+    if not route_ok:
+        categories.append("route_mismatch")
+    if not effective_hit_ok:
+        categories.append("effective_hit_mismatch")
+    if not keywords_ok:
+        categories.append("citation_keyword_missing")
+    if expected_context_keywords and missing_context_keywords:
+        categories.append("context_keyword_missing")
+    if refusal_ok is False:
+        categories.append("refusal_mismatch")
+    return categories
+
+
+def _badcase_breakdown(counter: Counter[str]) -> dict[str, dict[str, Any]]:
+    return {
+        category: {
+            "count": count,
+            "suggested_action": BADCASE_SUGGESTIONS.get(category, ""),
+        }
+        for category, count in sorted(counter.items())
+    }
 
 
 def _average(values: list[float]) -> float:

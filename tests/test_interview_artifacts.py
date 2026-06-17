@@ -42,13 +42,109 @@ def test_rag_eval_reports_citation_keyword_failures() -> None:
     assert report["summary"]["citation_accuracy"] == 0.0
     assert report["summary"]["context_precision"] == 0.0
     assert report["summary"]["context_recall"] == 0.0
+    assert report["summary"]["badcase_breakdown"] == {
+        "citation_keyword_missing": {
+            "count": 1,
+            "suggested_action": (
+                "补充或改写知识片段，或调整切片与 rerank，让期望证据关键词能进入引用。"
+            ),
+        },
+        "context_keyword_missing": {
+            "count": 1,
+            "suggested_action": (
+                "检查返回引用是否覆盖标注上下文，必要时调整召回、重排或知识库内容。"
+            ),
+        },
+    }
     assert report["failures"][0]["missing_keywords"] == ["seven day no reason refund"]
     assert report["failures"][0]["missing_context_keywords"] == ["seven day no reason refund"]
+    assert report["failures"][0]["badcase_categories"] == [
+        "citation_keyword_missing",
+        "context_keyword_missing",
+    ]
+    assert report["failures"][0]["suggested_actions"] == [
+        "补充或改写知识片段，或调整切片与 rerank，让期望证据关键词能进入引用。",
+        "检查返回引用是否覆盖标注上下文，必要时调整召回、重排或知识库内容。",
+    ]
     assert report["failures"][0]["route_ok"] is True
     assert report["failures"][0]["effective_hit_ok"] is True
     assert report["failures"][0]["citation_accuracy"] == 0.0
     assert report["failures"][0]["context_precision"] == 0.0
     assert report["failures"][0]["context_recall"] == 0.0
+
+
+def test_rag_eval_classifies_route_hit_and_refusal_badcases() -> None:
+    report = evaluate_rag_results(
+        [
+            {
+                "case_id": "mixed_failure",
+                "question": "How do I refund?",
+                "expected_route": "knowledge",
+                "expected_citation_keywords": ["refund policy"],
+                "expected_context_keywords": ["refund policy"],
+                "min_score": 0.8,
+                "expect_effective_hit": True,
+                "expect_refusal": True,
+            }
+        ],
+        [
+            {
+                "case_id": "mixed_failure",
+                "status_code": 200,
+                "route": "business",
+                "citations": [
+                    {
+                        "title": "shipping policy",
+                        "excerpt": "Shipment tracking is available after dispatch.",
+                        "score": 0.2,
+                    }
+                ],
+                "refusal": False,
+            }
+        ],
+    )
+
+    assert report["summary"]["failed"] == 1
+    assert report["summary"]["badcase_breakdown"] == {
+        "citation_keyword_missing": {
+            "count": 1,
+            "suggested_action": (
+                "补充或改写知识片段，或调整切片与 rerank，让期望证据关键词能进入引用。"
+            ),
+        },
+        "context_keyword_missing": {
+            "count": 1,
+            "suggested_action": (
+                "检查返回引用是否覆盖标注上下文，必要时调整召回、重排或知识库内容。"
+            ),
+        },
+        "effective_hit_mismatch": {
+            "count": 1,
+            "suggested_action": (
+                "检查 min_score、top_k、切片质量和召回候选，避免把低分兜底片段当成有效命中。"
+            ),
+        },
+        "refusal_mismatch": {
+            "count": 1,
+            "suggested_action": (
+                "检查拒答阈值、有效引用判断和 hallucination check，"
+                "确保无证据时拒答、有证据时不误拒。"
+            ),
+        },
+        "route_mismatch": {
+            "count": 1,
+            "suggested_action": (
+                "优先检查路由策略、意图关键词、页面上下文和业务对象信号是否足够明确。"
+            ),
+        },
+    }
+    assert report["failures"][0]["badcase_categories"] == [
+        "route_mismatch",
+        "effective_hit_mismatch",
+        "citation_keyword_missing",
+        "context_keyword_missing",
+        "refusal_mismatch",
+    ]
 
 
 def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
