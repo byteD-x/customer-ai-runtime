@@ -255,7 +255,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 .venv\Scripts\python.exe examples\interview_demo.py
 # 可选：使用脚本封装演示命令
 powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1
-# 可选：一键跑演示相关测试并输出演示 JSON
+# 可选：一键跑 RAG + Agent 演示相关测试并输出演示 JSON
 powershell -ExecutionPolicy Bypass -File scripts\interview-smoke.ps1
 ```
 

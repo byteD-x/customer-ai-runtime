@@ -6,8 +6,13 @@ $ErrorActionPreference = "Stop"
 
 $scriptsDir = $PSScriptRoot
 
-Write-Host "==> interview smoke: pytest + demo"
+Write-Host "==> interview smoke: rag pytest + agent pytest + demo"
 & powershell -ExecutionPolicy Bypass -File (Join-Path $scriptsDir "test-fast.ps1") -Suite rag -TimeoutSeconds $TimeoutSeconds
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+& powershell -ExecutionPolicy Bypass -File (Join-Path $scriptsDir "test-fast.ps1") -Suite agent -TimeoutSeconds $TimeoutSeconds
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

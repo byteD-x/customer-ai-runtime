@@ -66,6 +66,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite selector
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite external
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite rag
+powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite agent
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite runner
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_chat_knowledge_stream_flow"
 powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Target "tests\test_runtime_api.py::test_admin_prompt_revisions_return_safe_metadata,tests\test_runtime_api.py::test_admin_prompt_diff_compares_active_revision_with_target"
@@ -139,7 +140,7 @@ python -m compileall -q src tests
 - 线上 RAG 评估脚本只读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`，不能在缺少样本时宣称线上准确率
 - k6 smoke 只验证当前部署的健康检查和指标摘要接口，不等同于生产 SLA 或容量上限
 - 面试演示脚本应输出 `route`、`citations`、`finance_knowledge`、`saas_knowledge`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`agent_workflow`、`cost_summary`、`rag_eval_summary`
-- 一键面试 smoke 可先跑 `powershell -ExecutionPolicy Bypass -File scripts\interview-smoke.ps1`，它会先验证 RAG 相关测试，再输出演示 JSON
+- 一键面试 smoke 可先跑 `powershell -ExecutionPolicy Bypass -File scripts\interview-smoke.ps1`，它会先验证 RAG 与受控 Agent 工具流相关测试，再输出演示 JSON
 - 缺失 API Key 时可由宿主桥接完成认证
 - 不同行业上下文能影响路由与工具选择
 - 插件禁用后有默认兜底
