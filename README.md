@@ -251,6 +251,10 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 # 可选：真实线上脱敏标注样本评估，需要传入 JSON/JSONL 导出文件
 .venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
 
+# 一键生成面试材料包：默认导出 demo / RAG eval / readiness 报告；提供脱敏样本时额外导出 online eval
+powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1
+powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1 -OnlineRagSamplePath .codex\online-rag-sample.jsonl
+
 # 面试演示：知识问答、财务运营知识问答、SaaS 管理知识问答、缓存命中、业务工具、结构化交接包、转人工队列、受控 Agent 工具流、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py
 # 面试演示 Markdown 报告：一页式总结，便于直接贴给面试官或写进作品集

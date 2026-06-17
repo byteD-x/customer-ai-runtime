@@ -57,6 +57,7 @@
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\test.ps1
+powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1
 .venv\Scripts\python.exe scripts\eval_rag.py --json --output .codex\rag-eval-report.json
 .venv\Scripts\python.exe scripts\check_external_readiness.py --json --output .codex\external-readiness-report.json
 .venv\Scripts\python.exe scripts\eval_online_rag.py path\to\online-rag.jsonl --json --output .codex\online-rag-eval-report.json
