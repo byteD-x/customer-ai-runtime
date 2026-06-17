@@ -16,3 +16,7 @@ RESUME_SNIPPETS.md
 *.pyo
 *.pyd
 .DS_Store
+.codex/external-readiness-report.json
+.codex/interview-demo-report.md
+.codex/online-rag-eval-report.json
+.codex/rag-eval-report.json
