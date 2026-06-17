@@ -317,16 +317,22 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert result["route"]["knowledge_first"] == "knowledge"
     assert result["route"]["knowledge_cached"] == "knowledge"
     assert result["route"]["knowledge_cache_hit"] is True
+    assert result["route"]["finance_knowledge"] == "knowledge"
     assert result["route"]["business"] == "business"
     assert result["route"]["risk"] == "risk"
     assert result["citations"]
+    assert result["finance_knowledge"]["citations"]
+    finance_citation = result["finance_knowledge"]["citations"][0]
+    assert finance_citation["title"] == "finance operations policy"
+    assert "valid invoice" in finance_citation["excerpt"]
+    assert "cost center" in finance_citation["excerpt"]
     assert result["tool_result"]["status"] == "success"
     assert result["handoff_package"]["sentiment"] == "negative"
     assert result["handoff_package"]["related_business_objects"]["order_id"] == "ORD-1001"
     assert "ORD-1001" in result["handoff_package"]["issue_summary"]
     assert result["handoff_queue"]
     assert result["claimed_session"]["state"] == "human_in_service"
-    assert result["cost_summary"]["sample_size"] >= 4
+    assert result["cost_summary"]["sample_size"] >= 5
     assert result["cost_summary"]["cache_hits"] >= 1
     assert result["rag_eval_summary"]["failed"] == 0
     assert result["rag_eval_summary"]["offline_accuracy"] == 1.0

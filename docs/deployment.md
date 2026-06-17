@@ -250,7 +250,7 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 k6 run deploy\k6-smoke.js
 ```
 
-当前本地实测基线为：`scripts/test.ps1` 通过、RAG eval 8 cases passed、`examples/interview_demo.py` 跑通；`pytest` 数量以实际门禁输出为准。
+当前本地实测基线为：`scripts/test.ps1` 通过、RAG eval 10 cases passed、`examples/interview_demo.py` 跑通；`pytest` 数量以实际门禁输出为准。
 
 上述脚本默认使用本地 provider 和临时存储，适合部署前后做演示闭环检查；输出不代表线上 RAG 准确率、真实成本节省、外部 provider 联调通过或生产压测结果。`scripts/check_external_readiness.py` 只检查可选外部依赖的配置一致性、HTTP/TCP 可达性和部分权限探针；其中 `qdrant_runtime_config` 只说明应用是否选择 Qdrant provider 以及 URL 是否存在，`qdrant_health` / `qdrant_collections` 只说明 Qdrant HTTP 探针可达。JSON 输出会在顶层 `audit` 标明检查范围、生成时间、超时和证据等级，并在每个检查项 `audit` 标明依赖环境变量、探针类型和证据口径；未配置或未启用对应 provider 时返回 `skipped`。`deploy/k6-smoke.js` 是模板，只有保留真实 k6 输出后才能讨论 p95/p99、QPS 或 SLA。
 

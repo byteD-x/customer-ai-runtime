@@ -46,7 +46,7 @@
 - 可配置模型价格表，用于按 provider / model 估算本轮调用成本
 - 知识问答安全缓存与业务查询不缓存策略
 - Prompt revision 只读摘要、安全 diff、账本异常 issues 与回滚审计链路
-- RAG eval 8 个本地标注 cases、多知识库样例、cohort、人工复核状态、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score`、评测脚本与失败明细
+- RAG eval 10 个本地标注 cases、多知识库样例、cohort、人工复核状态、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score`、评测脚本与失败明细
 - 结构化 `handoff_package`：情绪、问题摘要、最后用户消息、相关业务对象、页面上下文与行为信号
 - 人工接管队列、`HandoffQueueBackend.enqueue` 入队契约、技能组、优先级排序、`queue_backend` / `atomic_claim` / `consistency_scope` / `queue_wait_seconds` 返回字段、默认 local 单进程认领、可选 SQLite 队列表事务认领和 `claim-next`
 - OpenAI models、OpenAI Admin usage/costs、Qdrant runtime config/health/collections、业务 API、客服工单 API、Redis/Postgres 队列依赖外部 readiness 脚本，缺少配置或未启用对应 provider 时返回 `skipped`，配置不一致或探针失败时返回 `failed`，并在 JSON 输出中提供顶层与逐项 `audit` 元数据

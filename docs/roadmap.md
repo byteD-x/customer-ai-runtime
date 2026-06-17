@@ -47,8 +47,8 @@
 6. 语音与 RTC 测试
 7. 成本与缓存测试：知识问答首次/重复、业务查询不缓存、本地模型价格表估算、usage 来源、币种、账期、本地预算阈值和成本摘要聚合
 8. 人工接管队列测试：优先级、入队时间、技能组过滤、认领状态、`queue_backend`、`atomic_claim`、`consistency_scope`，以及 local / SQLite 后端口径
-9. RAG eval 测试：8 个本地标注 cases、多知识库、cohort、人工复核状态、`offline_accuracy`、命中、低分未命中、引用关键词失败明细、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 分数
-10. 面试 demo 冒烟：输出 route、citations、tool_result、handoff_package、handoff_queue、claimed_session、cost_summary、rag_eval_summary
+9. RAG eval 测试：10 个本地标注 cases、多知识库、cohort、人工复核状态、`offline_accuracy`、命中、低分未命中、引用关键词失败明细、引用准确率、上下文 precision/recall、拒答准确率和 faithfulness 分数
+10. 面试 demo 冒烟：输出 route、citations、finance_knowledge、tool_result、handoff_package、handoff_queue、claimed_session、cost_summary、rag_eval_summary
 11. 外部 readiness 冒烟：未配置凭据或未启用对应 provider 时返回 `skipped`，配置后按真实 HTTP/TCP 探针或配置一致性检查返回，并输出检查范围、依赖环境变量、探针类型和证据口径
 12. k6 smoke：服务启动后验证健康检查与指标摘要接口，压测结果不外推生产 SLA
 12. 文档一致性核对

@@ -133,12 +133,12 @@ python -m compileall -q src tests
 - 成本摘要应按 provider、route 聚合 token、usage 来源、cost 来源、币种、账期、本地预算阈值、基于本地模型价格表的估算成本、provider billing 样本金额和缓存命中
 - Prompt revision 摘要和 diff 接口不得返回 Prompt 原文；应覆盖 unknown revision、空账本、损坏账本和 active revision 不唯一等治理异常
 - 人工接管队列应按风险优先级与入队时间排序，支持按 `skill_group` 过滤认领，并返回 `queue_backend` / `atomic_claim` / `consistency_scope` 当前后端口径和非负整数 `queue_wait_seconds` 本地等待时长；SQLite 后端需覆盖共享队列表事务认领，默认 local 后端仍只代表单进程锁内认领
-- RAG eval 应覆盖 8 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy` 和 `faithfulness_score`
+- RAG eval 应覆盖 10 个本地标注 cases、多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、命中、低分未命中、引用关键词失败明细、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy` 和 `faithfulness_score`
 - Chat 知识回复缺少有效引用时应返回 `refusal=true`、`refusal_reason`、空 `citations` / `references`，避免无证据强答
 - 外部 readiness 脚本在缺少 OpenAI / OpenAI Admin / Qdrant / 业务 API / 工单 API / Redis / Postgres 配置时应返回 `skipped`；`qdrant_runtime_config` 应区分应用是否启用 Qdrant provider 与是否配置 Qdrant URL；配置后按真实 HTTP/TCP 探针或配置一致性检查返回 `passed` / `skipped` / `failed`；JSON 输出应包含顶层 `audit` 与逐项 `audit`，用于说明检查范围、依赖环境变量、探针类型和证据口径
 - 线上 RAG 评估脚本只读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`，不能在缺少样本时宣称线上准确率
 - k6 smoke 只验证当前部署的健康检查和指标摘要接口，不等同于生产 SLA 或容量上限
-- 面试演示脚本应输出 `route`、`citations`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`
+- 面试演示脚本应输出 `route`、`citations`、`finance_knowledge`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`
 - 缺失 API Key 时可由宿主桥接完成认证
 - 不同行业上下文能影响路由与工具选择
 - 插件禁用后有默认兜底
