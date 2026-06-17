@@ -138,7 +138,7 @@ python -m compileall -q src tests
 - 外部 readiness 脚本在缺少 OpenAI / OpenAI Admin / Qdrant / 业务 API / 工单 API / Redis / Postgres 配置时应返回 `skipped`；`qdrant_runtime_config` 应区分应用是否启用 Qdrant provider 与是否配置 Qdrant URL；配置后按真实 HTTP/TCP 探针或配置一致性检查返回 `passed` / `skipped` / `failed`；JSON 输出应包含顶层 `audit` 与逐项 `audit`，用于说明检查范围、依赖环境变量、探针类型和证据口径
 - 线上 RAG 评估脚本只读取脱敏 JSON/JSONL 样本并输出 `online_accuracy`，不能在缺少样本时宣称线上准确率
 - k6 smoke 只验证当前部署的健康检查和指标摘要接口，不等同于生产 SLA 或容量上限
-- 面试演示脚本应输出 `route`、`citations`、`finance_knowledge`、`saas_knowledge`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`cost_summary`、`rag_eval_summary`
+- 面试演示脚本应输出 `route`、`citations`、`finance_knowledge`、`saas_knowledge`、`tool_result`、`handoff_package`、`handoff_queue`、`claimed_session`、`agent_workflow`、`cost_summary`、`rag_eval_summary`
 - 缺失 API Key 时可由宿主桥接完成认证
 - 不同行业上下文能影响路由与工具选择
 - 插件禁用后有默认兜底

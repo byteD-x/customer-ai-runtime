@@ -338,6 +338,16 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert "ORD-1001" in result["handoff_package"]["issue_summary"]
     assert result["handoff_queue"]
     assert result["claimed_session"]["state"] == "human_in_service"
+    agent_workflow = result["agent_workflow"]
+    assert agent_workflow["plan"] == ["order_status", "logistics_tracking"]
+    assert agent_workflow["state"] == "final"
+    assert "YT-2001" in agent_workflow["final_answer"]
+    assert [item["tool_name"] for item in agent_workflow["trace"]] == [
+        "order_status",
+        "logistics_tracking",
+    ]
+    assert [item["status"] for item in agent_workflow["trace"]] == ["success", "success"]
+    assert agent_workflow["trace"][0]["observation"]["data"]["tracking_no"] == "YT-2001"
     assert result["cost_summary"]["sample_size"] >= 6
     assert result["cost_summary"]["cache_hits"] >= 1
     assert result["rag_eval_summary"]["failed"] == 0

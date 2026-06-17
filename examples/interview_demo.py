@@ -68,6 +68,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
             )
             handoff_queue = _get_handoff_queue(client)
             claimed_session = _claim_next_handoff(client)
+            agent_workflow = _run_agent_workflow(client)
             cost_summary = _get_cost_summary(client)
             rag_eval = _run_rag_eval(client, eval_payload["cases"])
         get_settings.cache_clear()
@@ -90,6 +91,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
         "handoff_package": risk["handoff"],
         "handoff_queue": handoff_queue,
         "claimed_session": claimed_session,
+        "agent_workflow": agent_workflow,
         "cost_summary": cost_summary,
         "rag_eval_summary": rag_eval["summary"],
         "rag_eval_failures": rag_eval["failures"],
@@ -115,6 +117,7 @@ def main() -> int:
             "handoff_package",
             "handoff_queue",
             "claimed_session",
+            "agent_workflow",
             "cost_summary",
             "rag_eval_summary",
         ):
@@ -205,6 +208,32 @@ def _claim_next_handoff(client: TestClient) -> dict[str, Any] | None:
     response.raise_for_status()
     data = response.json()["data"]
     return None if data is None else dict(data)
+
+
+def _run_agent_workflow(client: TestClient) -> dict[str, Any]:
+    response = client.post(
+        "/api/v1/agents/tool-workflow",
+        headers=ADMIN_HEADERS,
+        json={
+            "tenant_id": "demo-tenant",
+            "channel": "web",
+            "integration_context": {"industry": "ecommerce"},
+            "allowed_tools": ["order_status", "logistics_tracking"],
+            "max_steps": 2,
+            "steps": [
+                {
+                    "tool_name": "order_status",
+                    "parameters": {"order_id": "ORD-1001"},
+                },
+                {
+                    "tool_name": "logistics_tracking",
+                    "parameters": {"tracking_no": "YT-2001"},
+                },
+            ],
+        },
+    )
+    response.raise_for_status()
+    return dict(response.json()["data"])
 
 
 def _get_cost_summary(client: TestClient) -> dict[str, Any]:
