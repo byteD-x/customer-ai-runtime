@@ -212,7 +212,7 @@
 | 主投必备 | FastAPI 后端 API | Python/FastAPI 52 条 | 已有 FastAPI、schema、鉴权、测试 |
 | 主投必备 | 权限与多租户 | 企业知识库和客服类岗位共性要求 | 已有 `tenant_id`、API Key、宿主桥接 |
 | 主投必备 | 本地演示闭环 | 投递和面试要求可讲可验 | 已有 `examples/interview_demo.py` |
-| 进阶强化 | RAG 评测 | 25-40K 关注质量闭环 | 已有 8 个 eval cases 和失败明细 |
+| 进阶强化 | RAG 评测 | 25-40K 关注质量闭环 | 已有 10 个 eval cases 和失败明细 |
 | 进阶强化 | 成本治理 | 平台化岗位关注 usage 和成本 | 已有 token usage、成本摘要、账单样本导入 |
 | 进阶强化 | 可观测性 | Agent/RAG 工程化岗位高频追问 | 已有 diagnostics、metrics、step trace |
 | 进阶强化 | 稳定性治理 | 高薪岗位关注超时、限流、降级 | 已有限流、readiness、测试脚本；熔断和降级可继续补 |
@@ -305,7 +305,7 @@
 - 对应岗位要求：Recall@K、faithfulness、citation alignment、golden dataset、badcase。
 - 对应岗位方向：AI应用/RAG、AI平台。
 - 修改范围：`examples/rag_eval_cases.json`、`scripts/eval_rag.py`、`tests/test_interview_artifacts.py`。
-- 实现思路：在现有 8 个本地 cases 基础上补更多行业样例和失败类型；输出 `badcase_categories`、`suggested_actions` 与汇总级 `badcase_breakdown`。
+- 实现思路：在现有 10 个本地 cases 基础上继续补更多行业样例和失败类型；输出 `badcase_categories`、`suggested_actions` 与汇总级 `badcase_breakdown`。
 - 为什么值得做：25-40K 岗位会追问质量闭环。
 - 为什么不过度设计：先扩样例和失败分类，不引入复杂评测平台。
 - 验证方式：`.venv\Scripts\python.exe scripts\eval_rag.py --json`。

@@ -51,6 +51,21 @@
           }
         }
       ]
+    },
+    {
+      "tenant_id": "demo-tenant",
+      "knowledge_base_id": "kb_finance_ops",
+      "name": "finance operations",
+      "description": "Local interview RAG evaluation finance operations knowledge base",
+      "documents": [
+        {
+          "title": "finance operations policy",
+          "content": "Finance expense reimbursement requires a valid invoice and cost center before approval. Vendor payment approval requires purchase order matching and finance owner review before release.",
+          "metadata": {
+            "source": "finance-ops"
+          }
+        }
+      ]
     }
   ],
   "cases": [
@@ -196,6 +211,54 @@
       "expected_context_keywords": [
         "Audit log export",
         "180 days"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
+      "case_id": "finance_expense_receipt_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "finance_ops",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "approval_requirement",
+        "reviewer": "local_fixture"
+      },
+      "question": "What is required for finance expense reimbursement approval?",
+      "knowledge_base_id": "kb_finance_ops",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "valid invoice",
+        "cost center"
+      ],
+      "expected_context_keywords": [
+        "expense reimbursement",
+        "valid invoice",
+        "cost center"
+      ],
+      "min_score": 0.18,
+      "expect_effective_hit": true
+    },
+    {
+      "case_id": "finance_vendor_payment_hit",
+      "dataset_id": "local_interview_v1",
+      "cohort": "finance_ops",
+      "review_status": "reviewed",
+      "label": {
+        "expected_answer_type": "approval_workflow",
+        "reviewer": "local_fixture"
+      },
+      "question": "What checks are needed before vendor payment release?",
+      "knowledge_base_id": "kb_finance_ops",
+      "expected_route": "knowledge",
+      "expected_citation_keywords": [
+        "purchase order matching",
+        "finance owner review"
+      ],
+      "expected_context_keywords": [
+        "Vendor payment approval",
+        "purchase order matching",
+        "finance owner review"
       ],
       "min_score": 0.18,
       "expect_effective_hit": true

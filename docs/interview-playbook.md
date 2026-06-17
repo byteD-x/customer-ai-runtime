@@ -38,8 +38,8 @@
 
 **可讲亮点**
 
-- 新增 8 个本地标注 eval cases，评估 route 是否正确、citation 是否包含期望关键词、citation score 是否达到有效命中阈值。
-- eval payload 支持多知识库播种，当前覆盖 `kb_support` 和 `kb_saas`，包含行业术语和反馈回放样例。
+- 新增 10 个本地标注 eval cases，评估 route 是否正确、citation 是否包含期望关键词、citation score 是否达到有效命中阈值。
+- eval payload 支持多知识库播种，当前覆盖 `kb_support`、`kb_saas` 和 `kb_finance_ops`，包含客服、SaaS、财务运营和反馈回放样例。
 - eval payload 带 `dataset_id`、`cohort`、`review_status` 和 `label`，汇总输出 `reviewed_case_count`、`offline_accuracy`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_accuracy`、`faithfulness_score` 与 `cohort_breakdown`。
 - Chat 知识回复会输出引用来源字段，并在无有效引用时返回 `refusal=true` 和 `hallucination_check`，避免无证据强答。
 - `low_score_miss` 用例用于证明“低分不算有效命中”，避免把兜底引用包装成准确命中。
@@ -235,7 +235,7 @@ k6 run deploy\k6-smoke.js
 
 - **S**：RAG demo 容易只展示成功样例，无法解释引用缺失和低分召回。
 - **T**：建立本地可复现 eval，证明评测机制而非虚构准确率。
-- **A**：设计 8 个带 dataset、cohort、review_status 和 label 的 eval cases，检查 route、引用关键词、上下文 precision/recall、有效命中阈值、拒答期望和 faithfulness 分数，输出失败明细，并覆盖多知识库与反馈回放。
+- **A**：设计 10 个带 dataset、cohort、review_status 和 label 的 eval cases，检查 route、引用关键词、上下文 precision/recall、有效命中阈值、拒答期望和 faithfulness 分数，输出失败明细，并覆盖客服、SaaS、财务运营多知识库与反馈回放。
 - **R**：`scripts/eval_rag.py` 可本地复跑，当前本地标注样例通过；线上准确率需业务标注集。
 
 ### STAR：人工接管队列

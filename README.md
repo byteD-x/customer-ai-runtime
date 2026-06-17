@@ -33,7 +33,7 @@
 - **知识版本管理** - 支持版本快照、激活切换与回滚，检索与引用按激活版本隔离
 - **知识库效果分析** - 管理端汇总命中率、有效命中率、满意度、负反馈率，并输出优化建议
 - **低成本治理** - 文本链路记录 LLM token、usage 来源、币种、账期、可配置模型价格估算、缓存命中与预算告警；支持导入 provider billing 样本并在管理端区分本地估算成本、provider 账单样本金额、诊断样本差异和 usage token 对账摘要；导入响应会返回非阻断的 `quality_issue_count` / `quality_issues`，用于提示本地样本质量问题；知识问答安全缓存，业务查询保持实时不缓存，并输出单实例缓存运行时统计
-- **可复现 RAG 评测** - 提供 8 个本地标注 eval cases 与脚本，覆盖多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、上下文 precision/recall、有效命中率、失败明细和 badcase 分类建议
+- **可复现 RAG 评测** - 提供 10 个本地标注 eval cases 与脚本，覆盖客服、SaaS、财务运营多知识库、标注集元数据、灰度 cohort、人工复核状态、离线准确率、引用关键词、上下文 precision/recall、有效命中率、失败明细和 badcase 分类建议
 - **人工接管队列** - 入队动作已收敛到 `HandoffQueueBackend.enqueue` 并支持容器注入；默认 `local` 后端基于 Session 单进程认领，可选 `sqlite` 后端提供共享队列表事务认领；管理端队列项返回本地观测字段 `queue_wait_seconds`
 - **受控 Agent 工具流** - 支持白名单工具顺序编排、步骤上限、失败停止和 HTTP trace 返回，默认仅 `admin` / `operator` 可调用
 

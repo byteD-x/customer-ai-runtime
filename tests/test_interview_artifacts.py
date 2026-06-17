@@ -159,8 +159,10 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
     assert "business_unrelated_miss" in case_ids
     assert "saas_scim_sync_hit" in case_ids
     assert "saas_audit_retention_hit" in case_ids
+    assert "finance_expense_receipt_hit" in case_ids
+    assert "finance_vendor_payment_hit" in case_ids
     assert "feedback_replay_refund_hit" in case_ids
-    assert knowledge_base_ids == {"kb_support", "kb_saas"}
+    assert knowledge_base_ids == {"kb_support", "kb_saas", "kb_finance_ops"}
     assert all(case["dataset_id"] == "local_interview_v1" for case in cases)
     assert all(case["review_status"] == "reviewed" for case in cases)
 
@@ -173,6 +175,8 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
                 "refund_payment_proof_hit",
                 "business_unrelated_miss",
                 "saas_scim_sync_hit",
+                "finance_expense_receipt_hit",
+                "finance_vendor_payment_hit",
                 "feedback_replay_refund_hit",
             }
         ],
@@ -207,6 +211,34 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
                 ],
             },
             {
+                "case_id": "finance_expense_receipt_hit",
+                "route": "knowledge",
+                "citations": [
+                    {
+                        "title": "finance operations policy",
+                        "excerpt": (
+                            "Finance expense reimbursement requires a valid invoice and "
+                            "cost center before approval."
+                        ),
+                        "score": 0.41,
+                    }
+                ],
+            },
+            {
+                "case_id": "finance_vendor_payment_hit",
+                "route": "knowledge",
+                "citations": [
+                    {
+                        "title": "finance operations policy",
+                        "excerpt": (
+                            "Vendor payment approval requires purchase order matching and "
+                            "finance owner review before release."
+                        ),
+                        "score": 0.41,
+                    }
+                ],
+            },
+            {
                 "case_id": "feedback_replay_refund_hit",
                 "route": "knowledge",
                 "citations": [
@@ -226,8 +258,8 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
         item for item in report["cases"] if item["case_id"] == "business_unrelated_miss"
     )
     assert report["summary"]["failed"] == 0
-    assert report["summary"]["labeled_case_count"] == 4
-    assert report["summary"]["reviewed_case_count"] == 4
+    assert report["summary"]["labeled_case_count"] == 6
+    assert report["summary"]["reviewed_case_count"] == 6
     assert report["summary"]["offline_accuracy"] == 1.0
     assert report["summary"]["citation_accuracy"] == 1.0
     assert report["summary"]["context_precision"] == 1.0
@@ -237,6 +269,7 @@ def test_rag_eval_cases_cover_hit_and_unrelated_miss() -> None:
     assert report["summary"]["cohort_breakdown"]["support_baseline"]["case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["negative_control"]["case_count"] == 1
     assert report["summary"]["cohort_breakdown"]["saas_baseline"]["case_count"] == 1
+    assert report["summary"]["cohort_breakdown"]["finance_ops"]["case_count"] == 2
     assert report["summary"]["cohort_breakdown"]["feedback_replay"]["case_count"] == 1
     assert unrelated_case["effective_hit"] is False
     assert unrelated_case["effective_hit_ok"] is True
@@ -297,9 +330,10 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert result["cost_summary"]["cache_hits"] >= 1
     assert result["rag_eval_summary"]["failed"] == 0
     assert result["rag_eval_summary"]["offline_accuracy"] == 1.0
-    assert result["rag_eval_summary"]["context_precision"] == 0.9167
+    assert result["rag_eval_summary"]["context_precision"] == 0.9375
     assert result["rag_eval_summary"]["context_recall"] == 1.0
-    assert result["rag_eval_summary"]["reviewed_case_count"] == 8
+    assert result["rag_eval_summary"]["reviewed_case_count"] == 10
+    assert result["rag_eval_summary"]["cohort_breakdown"]["finance_ops"]["case_count"] == 2
 
 
 def test_external_readiness_skips_missing_optional_credentials() -> None:
