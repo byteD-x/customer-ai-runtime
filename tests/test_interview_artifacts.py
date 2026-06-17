@@ -8,6 +8,7 @@ from examples.interview_demo import render_markdown_report, run_demo, write_outp
 from scripts.check_external_readiness import run_checks
 from scripts.eval_rag import _render_output as render_rag_eval_output
 from scripts.eval_rag import write_output_file as write_rag_eval_output_file
+from scripts.interview_package import run_package
 
 
 def test_rag_eval_reports_citation_keyword_failures() -> None:
@@ -400,6 +401,42 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     write_output_file(output_path, markdown_report)
     exported_report = output_path.read_text(encoding="utf-8")
     assert exported_report == markdown_report
+
+
+def test_interview_package_generates_cross_platform_reports(tmp_path: Path) -> None:
+    output_dir = tmp_path / "package"
+
+    result = run_package(
+        output_dir=output_dir,
+        online_rag_sample_path=Path("examples/online_rag_sample.jsonl"),
+        readiness_timeout_seconds=0.1,
+        env={},
+    )
+
+    generated = result["generated"]
+    assert set(generated) == {
+        "interview_demo_report",
+        "rag_eval_report",
+        "external_readiness_report",
+        "online_rag_eval_report",
+    }
+
+    interview_report = Path(generated["interview_demo_report"]).read_text(encoding="utf-8")
+    rag_eval_report = json.loads(Path(generated["rag_eval_report"]).read_text(encoding="utf-8"))
+    readiness_report = json.loads(
+        Path(generated["external_readiness_report"]).read_text(encoding="utf-8")
+    )
+    online_eval_report = json.loads(
+        Path(generated["online_rag_eval_report"]).read_text(encoding="utf-8")
+    )
+
+    assert output_dir / "interview-demo-report.md" == Path(generated["interview_demo_report"])
+    assert "# Customer AI Runtime" in interview_report
+    assert "offline_accuracy=1" in interview_report
+    assert rag_eval_report["rag_eval_summary"]["summary"]["failed"] == 0
+    assert readiness_report["overall_status"] == "skipped"
+    assert readiness_report["audit"]["timeout_seconds"] == 0.1
+    assert online_eval_report["online_rag_eval_summary"]["summary"]["online_accuracy"] == 1.0
 
 
 def test_external_readiness_skips_missing_optional_credentials() -> None:

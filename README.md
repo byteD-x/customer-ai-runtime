@@ -254,6 +254,9 @@ powershell -ExecutionPolicy Bypass -File scripts\test.ps1
 # 一键生成面试材料包：默认导出 demo / RAG eval / readiness 报告；提供脱敏样本时额外导出 online eval
 powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1
 powershell -ExecutionPolicy Bypass -File scripts\interview-package.ps1 -OnlineRagSamplePath examples\online_rag_sample.jsonl
+# Python 跨平台入口：Linux/macOS 激活虚拟环境后可将 `.venv\Scripts\python.exe` 替换为 `python`
+.venv\Scripts\python.exe scripts\interview_package.py
+.venv\Scripts\python.exe scripts\interview_package.py --online-rag-sample-path examples\online_rag_sample.jsonl
 
 # 面试演示：知识问答、财务运营知识问答、SaaS 管理知识问答、缓存命中、业务工具、结构化交接包、转人工队列、受控 Agent 工具流、成本摘要、RAG eval
 .venv\Scripts\python.exe examples\interview_demo.py
