@@ -1,6 +1,7 @@
 param(
     [switch] $Json,
     [switch] $Markdown,
+    [string] $OutputPath,
     [string] $StorageRoot
 )
 
@@ -27,6 +28,9 @@ try {
     }
     elseif ($Markdown) {
         $args += "--markdown"
+    }
+    if ($OutputPath) {
+        $args += @("--output", $OutputPath)
     }
     if ($StorageRoot) {
         $args += @("--storage-root", $StorageRoot)

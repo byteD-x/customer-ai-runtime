@@ -111,31 +111,56 @@ def main() -> int:
         action="store_true",
         help="Print a human-readable Markdown report.",
     )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Write the selected output to a UTF-8 file.",
+    )
     args = parser.parse_args()
 
     result = run_demo(storage_root=args.storage_root)
+    if args.output is not None:
+        output_text = _render_cli_output(
+            result,
+            json_output=args.json,
+            markdown_output=args.markdown,
+        )
+        write_output_file(args.output, output_text)
+        print(f"wrote_report: {args.output}")
+        return 0 if result["rag_eval_summary"]["failed"] == 0 else 1
+
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     elif args.markdown:
         print(render_markdown_report(result))
     else:
-        for key in (
-            "route",
-            "citations",
-            "finance_knowledge",
-            "saas_knowledge",
-            "tool_result",
-            "handoff_package",
-            "handoff_queue",
-            "claimed_session",
-            "agent_workflow",
-            "cost_summary",
-            "rag_eval_summary",
-            "rag_quality_gate",
-        ):
+        for key in _DEFAULT_OUTPUT_KEYS:
             print(key)
             print(json.dumps(result[key], ensure_ascii=False, indent=2))
     return 0 if result["rag_eval_summary"]["failed"] == 0 else 1
+
+
+def write_output_file(output_path: Path, output_text: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(output_text, encoding="utf-8")
+
+
+def _render_cli_output(
+    result: dict[str, Any],
+    *,
+    json_output: bool,
+    markdown_output: bool,
+) -> str:
+    if json_output:
+        return json.dumps(result, ensure_ascii=False, indent=2) + "\n"
+    if markdown_output:
+        return render_markdown_report(result)
+    sections: list[str] = []
+    for key in _DEFAULT_OUTPUT_KEYS:
+        sections.append(key)
+        sections.append(json.dumps(result[key], ensure_ascii=False, indent=2))
+    return "\n".join(sections) + "\n"
 
 
 def render_markdown_report(result: dict[str, Any]) -> str:
@@ -280,6 +305,22 @@ def render_markdown_report(result: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines).rstrip() + "\n"
+
+
+_DEFAULT_OUTPUT_KEYS = (
+    "route",
+    "citations",
+    "finance_knowledge",
+    "saas_knowledge",
+    "tool_result",
+    "handoff_package",
+    "handoff_queue",
+    "claimed_session",
+    "agent_workflow",
+    "cost_summary",
+    "rag_eval_summary",
+    "rag_quality_gate",
+)
 
 
 def _load_eval_payload() -> dict[str, Any]:

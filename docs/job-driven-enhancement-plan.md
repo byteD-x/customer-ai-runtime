@@ -486,7 +486,7 @@
 
 ### 8.8 一页式 Markdown 报告
 
-- `powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1 -Markdown` 可直接导出一页式 Markdown 演示报告。
+- `powershell -ExecutionPolicy Bypass -File scripts\interview-demo.ps1 -Markdown -OutputPath .codex\interview-demo-report.md` 可直接导出一页式 Markdown 演示报告文件。
 - 报告会汇总 route、model_route、cost_summary、rag_eval_summary、rag_quality_gate 和业务证据，适合发给面试官、贴进作品集或放进 README 片段。
 
 ## 9. 最终结论

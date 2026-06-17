@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from customer_ai_runtime.evaluation import evaluate_rag_results
-from examples.interview_demo import render_markdown_report, run_demo
+from examples.interview_demo import render_markdown_report, run_demo, write_output_file
 from scripts.check_external_readiness import run_checks
 
 
@@ -375,6 +375,11 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert "finance operations policy" in markdown_report
     assert "saas administration policy" in markdown_report
     assert "## 面试可讲点" in markdown_report
+
+    output_path = tmp_path / "reports" / "interview-demo.md"
+    write_output_file(output_path, markdown_report)
+    exported_report = output_path.read_text(encoding="utf-8")
+    assert exported_report == markdown_report
 
 
 def test_external_readiness_skips_missing_optional_credentials() -> None:
