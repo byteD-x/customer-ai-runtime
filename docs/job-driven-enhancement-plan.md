@@ -480,7 +480,7 @@
 8. 问：这个项目哪里体现 FastAPI 后端能力？  
    答：路由、schema、依赖注入、鉴权、streaming、上传、WebSocket、测试和 Docker 都在仓库里有实现。
 9. 问：如果 eval 失败怎么修？  
-   答：先看失败类型：route 错调路由，citation 缺失补知识或调切片，context precision 低调召回/重排，拒答错调阈值和证据门禁。
+   答：先看 `rag_quality_gate` 的失败 case、badcase breakdown 和修复建议：route 错调路由，citation 缺失补知识或调切片，context precision 低调召回/重排，拒答错调阈值和证据门禁，再把修复动作回到 eval 里复跑。
 10. 问：距离生产还差什么？  
    答：真实业务系统联调、线上标注集、生产监控告警、共享 Session 存储、多实例队列和真实账单自动拉取。
 

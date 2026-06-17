@@ -71,6 +71,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
             agent_workflow = _run_agent_workflow(client)
             cost_summary = _get_cost_summary(client)
             rag_eval = _run_rag_eval(client, eval_payload["cases"])
+            rag_quality_gate = _build_rag_quality_gate(rag_eval)
         get_settings.cache_clear()
 
     return {
@@ -94,6 +95,7 @@ def run_demo(storage_root: Path | None = None) -> dict[str, Any]:
         "agent_workflow": agent_workflow,
         "cost_summary": cost_summary,
         "rag_eval_summary": rag_eval["summary"],
+        "rag_quality_gate": rag_quality_gate,
         "rag_eval_failures": rag_eval["failures"],
     }
 
@@ -120,6 +122,7 @@ def main() -> int:
             "agent_workflow",
             "cost_summary",
             "rag_eval_summary",
+            "rag_quality_gate",
         ):
             print(key)
             print(json.dumps(result[key], ensure_ascii=False, indent=2))
@@ -263,6 +266,43 @@ def _run_rag_eval(client: TestClient, cases: list[dict[str, Any]]) -> dict[str, 
         data["case_id"] = case["case_id"]
         results.append(data)
     return evaluate_rag_results(cases, results)
+
+
+def _build_rag_quality_gate(rag_eval: dict[str, Any]) -> dict[str, Any]:
+    summary = dict(rag_eval.get("summary") or {})
+    failures = list(rag_eval.get("failures") or [])
+    badcase_breakdown = dict(summary.get("badcase_breakdown") or {})
+    suggested_actions = [
+        payload["suggested_action"]
+        for _, payload in sorted(badcase_breakdown.items())
+        if isinstance(payload, dict) and payload.get("suggested_action")
+    ]
+    failed_case_ids = [str(item.get("case_id")) for item in failures if item.get("case_id")]
+    failed = int(summary.get("failed") or 0)
+    reviewed_case_count = int(summary.get("reviewed_case_count") or 0)
+    labeled_case_count = int(summary.get("labeled_case_count") or 0)
+    case_count = int(summary.get("case_count") or 0)
+    passed = (
+        failed == 0
+        and case_count > 0
+        and reviewed_case_count == case_count
+        and labeled_case_count == case_count
+    )
+    return {
+        "passed": passed,
+        "case_count": case_count,
+        "reviewed_case_count": reviewed_case_count,
+        "labeled_case_count": labeled_case_count,
+        "offline_accuracy": summary.get("offline_accuracy"),
+        "citation_accuracy": summary.get("citation_accuracy"),
+        "context_precision": summary.get("context_precision"),
+        "context_recall": summary.get("context_recall"),
+        "refusal_accuracy": summary.get("refusal_accuracy"),
+        "faithfulness_score": summary.get("faithfulness_score"),
+        "badcase_breakdown": badcase_breakdown,
+        "failed_case_ids": failed_case_ids,
+        "suggested_actions": suggested_actions,
+    }
 
 
 @contextmanager

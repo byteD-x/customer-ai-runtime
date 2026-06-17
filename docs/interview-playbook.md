@@ -111,9 +111,10 @@ powershell -ExecutionPolicy Bypass -File scripts\test-fast.ps1 -Suite handoff
 7. 受控 Agent 工具流：输出 `agent_workflow`，展示 `plan`、`allowed_tools` 约束下的顺序 trace 和最终状态。
 8. 成本摘要：展示 `cost_summary` 的 cache hit、usage 来源、币种、账期，以及按 route / model 聚合。
 9. RAG eval：展示 `rag_eval_summary` 的标注样例、cohort、复核状态、引用准确率、上下文 precision/recall、拒答准确率、faithfulness 分数和 `offline_accuracy`。
-10. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
-11. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
-12. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
+10. RAG 质量门禁：展示 `rag_quality_gate` 的通过状态、失败 case、badcase breakdown 和修复建议，用于回答“失败后怎么定位和回归”。
+11. Online eval：如果有脱敏 JSON/JSONL 样本，可展示 `online_accuracy`，并强调它只代表输入样本。
+12. 外部 readiness：展示未配置外部凭据或未启用对应 provider 时 `overall_status=skipped`，以及 `audit` 中的检查范围、依赖环境变量、探针类型和证据口径；Qdrant 场景可用 `qdrant_runtime_config` 区分应用是否选择 Qdrant provider 与 URL 是否配置，强调不冒充真实端到端联调通过。
+13. k6 smoke：服务已启动且本机安装 k6 时，可用模板验证健康检查与指标摘要接口，不把模板阈值当生产 SLA。
 
 **验证命令**
 
@@ -198,7 +199,7 @@ k6 run deploy\k6-smoke.js
 - `expect_effective_hit=false` 用于验证低分未命中。
 - 失败明细暴露 `missing_keywords`、`missing_context_keywords`、`route_ok`、`effective_hit_ok`、`citation_accuracy`、`context_precision`、`context_recall`、`refusal_ok` 和 `faithfulness_score`。
 
-**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数、`offline_accuracy` 和 badcase 分类建议。
+**可验证结果**：`scripts/eval_rag.py` 输出 `rag_eval_summary`；`examples/interview_demo.py` 输出 `rag_quality_gate`，把失败 case、badcase breakdown 和修复建议收成面试可读摘要；`tests/test_interview_artifacts.py` 覆盖引用关键词失败明细、上下文 precision/recall、标注样例字段、人工复核计数、`offline_accuracy`、质量门禁和 badcase 分类建议。
 
 ### 难点 3：转人工要能被运营侧消费
 

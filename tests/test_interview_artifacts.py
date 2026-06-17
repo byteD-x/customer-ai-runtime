@@ -356,6 +356,17 @@ def test_interview_demo_returns_required_sections(tmp_path: Path) -> None:
     assert result["rag_eval_summary"]["context_recall"] == 1.0
     assert result["rag_eval_summary"]["reviewed_case_count"] == 10
     assert result["rag_eval_summary"]["cohort_breakdown"]["finance_ops"]["case_count"] == 2
+    quality_gate = result["rag_quality_gate"]
+    assert quality_gate["passed"] is True
+    assert quality_gate["case_count"] == 10
+    assert quality_gate["reviewed_case_count"] == 10
+    assert quality_gate["labeled_case_count"] == 10
+    assert quality_gate["offline_accuracy"] == 1.0
+    assert quality_gate["context_precision"] == 0.9375
+    assert quality_gate["context_recall"] == 1.0
+    assert quality_gate["badcase_breakdown"] == {}
+    assert quality_gate["failed_case_ids"] == []
+    assert quality_gate["suggested_actions"] == []
 
 
 def test_external_readiness_skips_missing_optional_credentials() -> None:
